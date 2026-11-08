@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Trip Kitty</title>
+<meta name="description" content="Shared trip expenses: split bills, track who paid, settle up.">
+<meta name="theme-color" content="#3A4BF2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trip Kitty">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+/* Layout: one phone-width column of boarding-pass cards; entry happens in a bottom sheet; a fixed "add" button sits over the thumb. */
+:root{
+  --bg:#EDF1FA; --surface:#FFFFFF; --ink:#17203B; --muted:#5A6482; --line:#D7DDEC; --chip:#E2E7F5;
+  --accent:#3A4BF2; --accent-ink:#FFFFFF; --sun:#FFC83D; --sun-ink:#3A2A00;
+  --good:#11895A; --bad:#D23D4B; --shadow:0 1px 0 rgba(23,32,59,.06),0 8px 24px -12px rgba(23,32,59,.25);
+  --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:18px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1222; --surface:#191F35; --ink:#EDF0FA; --muted:#98A1BF; --line:#2A3250; --chip:#252D48;
+  --accent:#8B96FF; --accent-ink:#0E1222; --sun:#FFD25E; --sun-ink:#2A1E00;
+  --good:#4CD39A; --bad:#FF7C87; --shadow:0 1px 0 rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.7); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1222; --surface:#191F35; --ink:#EDF0FA; --muted:#98A1BF; --line:#2A3250; --chip:#252D48;
+  --accent:#8B96FF; --accent-ink:#0E1222; --sun:#FFD25E; --sun-ink:#2A1E00;
+  --good:#4CD39A; --bad:#FF7C87; --shadow:0 1px 0 rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.7); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:10px}
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 120px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.logo{width:48px;height:48px;border-radius:14px;background:var(--sun);color:var(--sun-ink);display:grid;place-items:center;font-size:26px;transform:rotate(-6deg);box-shadow:var(--shadow)}
+.brand h1{font-size:34px;font-weight:800;line-height:1}
+.tag{font-size:15px;margin:4px 0 22px}
+
+.btn{border:0;border-radius:999px;padding:12px 18px;font-weight:700;background:var(--chip);display:inline-flex;align-items:center;gap:8px;justify-content:center;transition:transform .12s}
+.btn:active{transform:scale(.96)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.sun{background:var(--sun);color:var(--sun-ink)}
+.btn.ghost{background:transparent;border:1.5px solid var(--line)}
+.btn.danger{background:transparent;color:var(--bad);border:1.5px solid var(--bad)}
+.btn.sm{padding:8px 12px;font-size:14px}
+.btn.block{width:100%}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.icon-btn{border:0;background:var(--surface);width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;box-shadow:var(--shadow);flex:none}
+
+.pass{display:flex;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;text-align:left;border:0;padding:0;width:100%;transition:transform .15s}
+.pass:active{transform:scale(.98)}
+.pass .stub{width:78px;flex:none;display:grid;place-items:center;font-size:34px;background:var(--chip);position:relative}
+.pass .stub::after{content:"";position:absolute;right:-1px;top:8px;bottom:8px;border-right:2px dashed var(--line)}
+.pass .body{padding:14px 16px;min-width:0;flex:1;display:flex;flex-direction:column;gap:6px}
+.pass h3{font-size:20px;font-weight:800}
+.faces{display:flex}
+.face{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:16px;color:#17203B;border:2px solid var(--surface);flex:none}
+.faces .face+.face{margin-left:-8px}
+.empty{background:var(--surface);border:2px dashed var(--line);border-radius:var(--r);padding:28px 20px;text-align:center}
+.empty .big{font-size:44px;display:block;margin-bottom:6px}
+
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.topbar h2{font-size:22px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero{background:var(--accent);color:var(--accent-ink);border-radius:22px;padding:18px 18px 16px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+.hero::before{content:"";position:absolute;right:-30px;top:-30px;width:130px;height:130px;border-radius:50%;background:var(--sun);opacity:.9}
+.hero > *{position:relative}
+.hero .total{font-family:var(--display);font-size:40px;font-weight:800;line-height:1.05}
+.hero .sub{opacity:.85;font-size:14px}
+.hero .emoji{position:absolute;right:14px;top:10px;font-size:40px}
+.me-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.me-chip{border:0;border-radius:999px;padding:5px 12px 5px 5px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);color:inherit;font-weight:600;font-size:14px}
+.me-chip .face{width:24px;height:24px;font-size:13px;border:0}
+.me-chip.on{background:var(--sun);color:var(--sun-ink)}
+.mybal{margin-top:12px;font-weight:700;font-size:15px}
+
+.tabs{display:flex;gap:2px;margin:18px 0 14px;background:var(--chip);padding:4px;border-radius:999px}
+.tabs button{flex:1;border:0;background:transparent;border-radius:999px;padding:9px 2px;font-weight:700;font-size:13px;color:var(--muted);min-width:0}
+.tabs button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+.filters{display:flex;flex-direction:column;gap:8px;margin-bottom:6px}
+.fsel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.fsel select{border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 6px;font-size:13px;font-weight:600;min-width:0;width:100%}
+.fsel select.on{border-color:var(--accent);color:var(--accent)}
+.day{margin:14px 0 6px}
+.exp{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:16px;padding:12px 14px;border:0;width:100%;text-align:left;box-shadow:var(--shadow)}
+.exp + .exp{margin-top:8px}
+.exp .cat{width:44px;height:44px;border-radius:12px;background:var(--chip);display:grid;place-items:center;font-size:22px;flex:none}
+.exp .t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exp .m{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exp .amt{font-weight:800;font-family:var(--display);font-size:18px;text-align:right;white-space:nowrap}
+.exp .mine{font-size:12px;text-align:right;white-space:nowrap}
+.exp.settle{background:transparent;box-shadow:none;border:1.5px dashed var(--line)}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+
+.card{background:var(--surface);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+.bal{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px;padding:8px 0}
+.bar{height:10px;background:var(--chip);border-radius:99px;position:relative;overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;border-radius:99px}
+.bar.mid::before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;background:var(--line);z-index:1}
+.settle-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.settle-row:first-of-type{border-top:0}
+.stat{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:6px 0}
+.stat .bar{grid-column:1/-1;height:8px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .hit{fill:transparent;cursor:pointer}
+.chart .hit:hover + .b, .chart .b.sel{opacity:.75}
+.act{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.act:first-child{border-top:0}
+.act .ic{width:34px;height:34px;border-radius:10px;background:var(--chip);display:grid;place-items:center;flex:none}
+
+.scrim{position:fixed;inset:0;background:rgba(10,14,30,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center;animation:fade .2s}
+.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92%;overflow-y:auto;border-radius:24px 24px 0 0;padding:10px max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));animation:up .28s cubic-bezier(.2,.9,.3,1.2)}
+.grab{width:44px;height:5px;border-radius:9px;background:var(--line);margin:0 auto 12px}
+.sheet h2{font-size:24px;font-weight:800;margin-bottom:14px}
+@keyframes up{from{transform:translateY(40%);opacity:.4}}
+@keyframes fade{from{opacity:0}}
+.noanim{animation:none!important}
+.field{display:flex;flex-direction:column;gap:6px}
+.input{width:100%;border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 14px;min-width:0}
+.input:focus{outline:none;border-color:var(--accent)}
+textarea.input{resize:vertical;min-height:70px}
+.amount-row{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:8px}
+.amount-in{font-family:var(--display);font-size:38px;font-weight:800;text-align:center;padding:10px;border:0;background:var(--surface);border-radius:18px;width:100%;min-width:0}
+.amount-in:focus{outline:3px solid var(--accent)}
+.cur-sel{border:0;background:var(--surface);border-radius:18px;font-weight:800;font-size:16px;text-align:center;padding:0 6px}
+.rate-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600;font-size:14px}
+.rate-row .input{width:110px;padding:8px 10px;text-align:right}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chip .face{width:22px;height:22px;font-size:12px;border:0}
+.chip small{font-weight:700;opacity:.85}
+.seg{display:flex;background:var(--chip);border-radius:999px;padding:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:999px;padding:7px 2px;font-weight:700;font-size:13px;color:var(--muted);min-width:0}
+.seg button.on{background:var(--surface);color:var(--ink)}
+.mrow{display:grid;grid-template-columns:auto minmax(0,1fr) 92px;gap:10px;align-items:center}
+.mrow .input{padding:9px 10px;text-align:right}
+.mrow .prev{grid-column:2/-1;font-size:12px;margin-top:-6px;text-align:right}
+.item{background:var(--surface);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.item .r{display:grid;grid-template-columns:minmax(0,1fr) 92px auto;gap:8px;align-items:center}
+.item .input{padding:8px 10px}
+.item .who{display:flex;flex-wrap:wrap;gap:6px}
+.who button{border:2px solid transparent;border-radius:50%;padding:0;background:none;opacity:.35}
+.who button.on{opacity:1;border-color:var(--accent)}
+.note{font-size:13px;font-weight:600}
+.receipt{display:flex;gap:12px;align-items:center;background:var(--surface);border-radius:14px;padding:10px}
+.thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--chip);border:0;padding:0;flex:none}
+.thumb img{width:100%;height:100%;object-fit:cover;border-radius:10px}
+.file-btn{position:relative;overflow:hidden}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.emoji-pick{display:flex;flex-wrap:wrap;gap:6px}
+.emoji-pick button{width:42px;height:42px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:22px}
+.emoji-pick button.on{border-color:var(--accent);background:var(--chip);transform:scale(1.08)}
+.person-edit{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.person-edit:first-child{border-top:0}
+.linkbox{word-break:break-all;font-size:13px;background:var(--surface);border:1.5px dashed var(--line);border-radius:12px;padding:10px;user-select:all}
+.lightbox{position:fixed;inset:0;z-index:80;background:rgba(5,8,18,.9);display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.lightbox img{max-width:100%;max-height:100%;border-radius:12px}
+.spin{display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:30;box-shadow:0 10px 30px -8px rgba(58,75,242,.6);padding:15px 26px;font-size:17px}
+.fab:active{transform:translateX(-50%) scale(.95)}
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:700;z-index:90;max-width:calc(100% - 32px);text-align:center;animation:fade .2s}
+.banner{background:var(--sun);color:var(--sun-ink);border-radius:14px;padding:10px 14px;font-weight:600;font-size:14px;margin-bottom:14px}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:70}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+<style>
+html,body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+img{max-width:100%}
+[hidden]{display:none!important}
+.setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="sheet-root"></div>
+<div id="lightbox-root"></div>
+<canvas id="confetti" hidden></canvas>
+
+<script>
+/* ===== 1. PASTE YOUR SUPABASE DETAILS HERE (Project Settings → API) ===== */
+const SUPABASE_URL = "https://ufseixhixstajnxyrupq.supabase.co";       // e.g. https://abcdefgh.supabase.co
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmc2VpeGhpeHN0YWpueHlydXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQxNDkwMzQsImV4cCI6MjEwOTcyNTAzNH0.5r5ApnJD9CSogXzpvlje6oI5njeBVDF7I2Pvcd3vaEc"; // the "anon" / "publishable" key, NOT the service_role key
+/* ======================================================================= */
+
+const CATS = [{k:"food",e:"🍜",l:"Food"},{k:"drinks",e:"🍹",l:"Drinks"},{k:"transport",e:"🚕",l:"Transport"},{k:"stay",e:"🏨",l:"Stay"},{k:"fun",e:"🎢",l:"Fun"},{k:"shopping",e:"🛍️",l:"Shopping"},{k:"groceries",e:"🛒",l:"Groceries"},{k:"other",e:"✨",l:"Other"}];
+const TRIP_EMOJI = ["🏝️","🏔️","🗼","🏕️","🚗","✈️","🌋","🍣","🎡","🏛️","🌸","🐘"];
+const PERSON_EMOJI = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁","🐵","🐰","🐢"];
+const COLORS = ["#FFB4A2","#A8E6CF","#FFD3B6","#B5C7FF","#F8C8F0","#FFE29A","#9FE2F2","#D4C1FF"];
+const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer"];
+const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
+const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"]];
+const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Into the kitty! 🐱","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
+const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
+
+const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
+  tab:"expenses", q:"", fCat:"", fWho:"", fMethod:"" };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const newId = (n = 20) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, b => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join(""); };
+const iso = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const today = () => iso(new Date());
+const parseAmt = v => { const n = parseFloat(String(v ?? "").replace(/\s/g,"").replace(",", ".")); return isFinite(n) ? n : 0; };
+const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const round = (n, d=2) => Math.round(n * 10**d) / 10**d;
+
+function trip(){ return S.trip; }
+function validCur(c){ if (!/^[A-Z]{3}$/.test(c||"")) return false; try { new Intl.NumberFormat(undefined,{style:"currency",currency:c}); return true; } catch { return false; } }
+function decimals(cur){ try { return new Intl.NumberFormat(undefined,{style:"currency",currency:cur}).resolvedOptions().maximumFractionDigits; } catch { return 2; } }
+function fmt(n, cur){ try { return new Intl.NumberFormat(undefined,{style:"currency",currency:cur}).format(n); } catch { return (cur||"")+" "+n.toFixed(2); } }
+function person(t, id){ return (t.people||[]).find(p => p.id === id) || {id, name:"Someone", emoji:"👻", color:"#D7DDEC"}; }
+function face(p){ return `<span class="face" style="background:${esc(p.color)}" aria-hidden="true">${esc(p.emoji)}</span>`; }
+function cat(k){ return CATS.find(c => c.k === k) || CATS[CATS.length-1]; }
+function curList(...extra){ return [...new Set([...extra.filter(Boolean), ...CURRENCIES])]; }
+function niceDate(s){ if(!s) return ""; const d = new Date(s+"T12:00:00"); if (isNaN(d)) return s;
+  if (s === today()) return "Today";
+  const y = new Date(); y.setDate(y.getDate()-1); if (s === iso(y)) return "Yesterday";
+  return d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"}); }
+function ago(ts){ const s = (Date.now()-ts)/1000; if (s < 60) return "just now"; if (s < 3600) return Math.floor(s/60)+"m ago"; if (s < 86400) return Math.floor(s/3600)+"h ago";
+  return new Date(ts).toLocaleDateString(undefined,{day:"numeric",month:"short"})+" "+new Date(ts).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); }
+function me(){ return S.tripId ? lsGet("tk-me-" + S.tripId) || "" : ""; }
+function who(pid){ return pid ? (pid === me() ? "You" : person(S.trip || {}, pid).name) : "Someone"; }
+function toast(msg){ const el = document.createElement("div"); el.className = "toast"; el.textContent = msg; document.body.appendChild(el); setTimeout(() => el.remove(), 2400); }
+function tripLink(id){ return location.origin + location.pathname + "#t-" + id; }
+
+/* ---------- my trips (remembered on this device) ---------- */
+function myTrips(){ try { return JSON.parse(lsGet("tk-trips") || "[]"); } catch { return []; } }
+function rememberTrip(t){ const list = myTrips().filter(x => x.id !== t.id); list.unshift({id:t.id, name:t.name, emoji:t.emoji, currency:t.currency, people:(t.people||[]).length, seen:Date.now()}); lsSet("tk-trips", JSON.stringify(list.slice(0, 50))); }
+function forgetTrip(id){ lsSet("tk-trips", JSON.stringify(myTrips().filter(x => x.id !== id))); }
+
+/* ---------- Supabase ---------- */
+// Every request carries the trip id in a header; database rules only allow rows for that trip,
+// so nobody can list or read trips without the link.
+const clients = {};
+function sb(tid){ return clients[tid] ||= window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:"tk-"+tid}, global:{headers:{"x-trip-id":tid}} }); }
+let channel = null, pollTimer = null;
+function check(r){ if (r.error) throw r.error; return r.data; }
+async function loadTrip(quiet){
+  const tid = S.tripId; if (!tid || !CONFIGURED) return;
+  if (!quiet){ S.loaded = false; S.loadError = ""; render(); }
+  try {
+    const c = sb(tid);
+    const [t, e, a] = await Promise.all([
+      c.from("trips").select("data").eq("id", tid).maybeSingle(),
+      c.from("expenses").select("id,data").eq("trip_id", tid).limit(5000),
+      c.from("activity").select("id,data,created_at").eq("trip_id", tid).order("created_at", {ascending:false}).limit(150)]);
+    if (tid !== S.tripId) return;
+    const td = check(t);
+    S.trip = td ? {id:tid, ...td.data} : null;
+    S.expenses = check(e).map(r => ({id:r.id, ...r.data})).sort((x,y) => (y.createdAt||0)-(x.createdAt||0));
+    S.activity = check(a).map(r => ({id:r.id, ...r.data, at: r.data.at || Date.parse(r.created_at)}));
+    S.loaded = true; S.loadError = "";
+    if (S.trip) rememberTrip(S.trip);
+  } catch (err){
+    if (tid !== S.tripId) return;
+    S.loaded = true; S.loadError = (err && err.message) || "Couldn't reach the database.";
+  }
+  render();
+  if (S.trip && !me() && !draft && !askedWho.has(tid)){ askedWho.add(tid); whoAmISheet(); }
+}
+const askedWho = new Set();
+function startLive(){
+  stopLive(); if (!S.tripId || !CONFIGURED) return;
+  try {
+    channel = sb(S.tripId).channel("trip-" + S.tripId, {config:{broadcast:{self:false}}})
+      .on("broadcast", {event:"changed"}, () => loadTrip(true)).subscribe();
+  } catch {}
+  pollTimer = setInterval(() => { if (document.visibilityState === "visible") loadTrip(true); }, 30000);
+}
+function stopLive(){ if (channel){ try { sb(S.tripId || "x").removeChannel(channel); } catch {} channel = null; } if (pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
+function ping(){ if (channel) channel.send({type:"broadcast", event:"changed", payload:{at:Date.now()}}).catch(() => {}); }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.tripId) loadTrip(true); });
+
+async function write(fn, okMsg, log){
+  try {
+    await fn();
+    if (okMsg) toast(okMsg);
+    if (log) await sb(log[0]).from("activity").insert({id:newId(), trip_id:log[0], data:{at:Date.now(), who:me() || null, action:log[1], text:log[2]}}).then(() => {}, () => {});
+    ping(); if (S.tripId) await loadTrip(true);
+    return true;
+  } catch (e){
+    console.error(e);
+    toast(navigator.onLine === false ? "You're offline. Try again when you have signal." : "Couldn't save. Check your connection and try again.");
+    return false;
+  }
+}
+async function putTrip(tid, data){ check(await sb(tid).from("trips").upsert({id:tid, data, updated_at:new Date().toISOString()})); }
+async function patchTrip(patch){
+  const tid = S.tripId, c = sb(tid);
+  const cur = check(await c.from("trips").select("data").eq("id", tid).maybeSingle());
+  const data = {...(cur ? cur.data : {}), ...patch};
+  if (patch.rates) data.rates = {...((cur && cur.data.rates) || {}), ...patch.rates};
+  await putTrip(tid, data);
+}
+async function putExpense(id, body){ check(await sb(S.tripId).from("expenses").upsert({id, trip_id:S.tripId, data:body})); }
+async function delExpense(id){ check(await sb(S.tripId).from("expenses").delete().eq("id", id)); }
+function receiptUrl(path){ return path ? sb(S.tripId).storage.from("receipts").getPublicUrl(path).data.publicUrl : null; }
+
+/* ---------- money math ---------- */
+// Split `total` (integer minor units) in proportion to weights, largest remainder so it always sums exactly.
+function allocate(total, w){
+  const ids = Object.keys(w).filter(k => w[k] > 0), sumW = ids.reduce((s,k) => s + w[k], 0), out = {};
+  if (!ids.length || sumW <= 0) return out;
+  let used = 0; const fr = [];
+  ids.forEach(k => { const raw = total * w[k] / sumW, fl = Math.floor(raw); out[k] = fl; used += fl; fr.push([k, raw - fl]); });
+  fr.sort((a,b) => b[1]-a[1]); for (let i = 0; i < total - used; i++) out[fr[i % fr.length][0]]++;
+  return out;
+}
+function calcSplit(d, t){
+  const fE = 10 ** decimals(d.cur), fT = 10 ** decimals(t.currency);
+  const amt = parseAmt(d.amount), totalE = Math.round(amt * fE);
+  const rate = d.cur === t.currency ? 1 : parseAmt(d.rate);
+  const totalT = Math.round(amt * rate * fT);
+  const ids = (t.people||[]).map(p => p.id), w = {}; let err = "", status = "";
+  if (d.mode === "equal"){
+    d.among.forEach(id => { if (ids.includes(id)) w[id] = 1; });
+    const n = Object.keys(w).length; if (!n) err = "Pick at least one person to split with."; else status = n === 1 ? "One person pays it all" : `${n}-way split`;
+  } else if (d.mode === "exact"){
+    let sum = 0; ids.forEach(id => { const m = Math.round(parseAmt(d.exact[id]) * fE); if (m > 0){ w[id] = m; sum += m; } });
+    const left = totalE - sum;
+    if (!left) status = "Adds up perfectly ✔"; else err = left > 0 ? `${fmt(left/fE, d.cur)} left to assign` : `${fmt(-left/fE, d.cur)} over the total`;
+  } else if (d.mode === "percent"){
+    let sum = 0; ids.forEach(id => { const p = parseAmt(d.percent[id]); if (p > 0){ w[id] = p; sum += p; } });
+    const left = round(100 - sum, 3);
+    if (Math.abs(left) < 0.01) status = "100% ✔"; else err = left > 0 ? `${round(left,2)}% left to assign` : `${round(-left,2)}% too much`;
+  } else if (d.mode === "shares"){
+    let sum = 0; ids.forEach(id => { const p = parseAmt(d.shareN[id]); if (p > 0){ w[id] = p; sum += p; } });
+    if (!sum) err = "Give at least one person a share."; else status = `${round(sum,2)} share${sum===1?"":"s"} in total`;
+  } else if (d.mode === "items"){
+    let sumI = 0;
+    for (const it of d.items){ const m = Math.round(parseAmt(it.amount) * fE); if (m <= 0) continue;
+      const ws = it.who.filter(id => ids.includes(id)); if (!ws.length){ err = `Pick who had “${it.name || "an item"}”.`; break; }
+      sumI += m; ws.forEach(id => w[id] = (w[id]||0) + m / ws.length); }
+    if (!err){
+      if (!sumI) err = "Add at least one item with a price.";
+      else if (sumI > totalE) err = `Items add up to ${fmt(sumI/fE, d.cur)}, more than the total.`;
+      else { const rem = totalE - sumI; status = rem ? `Items ${fmt(sumI/fE, d.cur)} + ${fmt(rem/fE, d.cur)} tax/tip, shared in proportion` : "Items add up to the total ✔"; }
+    }
+  }
+  return { err, status, prevE: allocate(totalE, w), sharesT: allocate(totalT, w), totalE, totalT, fE, fT, rate };
+}
+function balances(t, exps){
+  const f = 10 ** decimals(t.currency), net = {};
+  (t.people||[]).forEach(p => net[p.id] = 0);
+  for (const e of exps){
+    net[e.payer] = (net[e.payer]||0) + Math.round(e.amount * f);
+    for (const [id, v] of Object.entries(e.shares||{})) net[id] = (net[id]||0) - Math.round(v * f);
+  }
+  return {net, f};
+}
+function settlePlan(net){
+  const cred = [], debt = [];
+  for (const [id, v] of Object.entries(net)){ if (v > 0) cred.push({id, v}); else if (v < 0) debt.push({id, v:-v}); }
+  cred.sort((a,b)=>b.v-a.v); debt.sort((a,b)=>b.v-a.v);
+  const plan = []; let i = 0, j = 0;
+  while (i < debt.length && j < cred.length){
+    const m = Math.min(debt[i].v, cred[j].v);
+    if (m > 0) plan.push({from:debt[i].id, to:cred[j].id, v:m});
+    debt[i].v -= m; cred[j].v -= m;
+    if (!debt[i].v) i++; if (!cred[j].v) j++;
+  }
+  return plan;
+}
+const MODE_LABEL = {exact:"exact split", percent:"split by %", shares:"split by shares", items:"itemized"};
+function splitLabel(e){ const n = Object.keys(e.shares||{}).length;
+  return MODE_LABEL[e.mode] ? `${MODE_LABEL[e.mode]} · ${n} ${n===1?"person":"people"}` : `split ${n} way${n===1?"":"s"}`; }
+
+/* ---------- routing ---------- */
+function readHash(){
+  const h = location.hash.replace(/^#/, "");
+  const id = h.startsWith("t-") ? h.slice(2) : null;
+  if (id !== S.tripId){
+    stopLive(); S.tripId = id; S.trip = null; S.expenses = []; S.activity = []; S.loaded = false;
+    S.tab = "expenses"; S.q = S.fCat = S.fWho = S.fMethod = "";
+    if (id){ loadTrip(); startLive(); }
+  }
+}
+function go(id){ if (id) location.hash = "t-" + id; else { try { history.pushState(null, "", location.pathname + location.search); } catch { location.hash = ""; } readHash(); render(); } }
+addEventListener("hashchange", () => { closeSheet(); readHash(); render(); window.scrollTo(0,0); });
+addEventListener("popstate", () => { readHash(); render(); });
+
+/* ---------- views ---------- */
+function render(){
+  const app = $("#app"), ae = document.activeElement;
+  const fid = ae && ae.id && app.contains(ae) ? ae.id : null;
+  let sel = null; try { if (fid && ae.selectionStart != null) sel = [ae.selectionStart, ae.selectionEnd]; } catch {}
+  app.innerHTML = !CONFIGURED ? setupView() : S.tripId ? tripView() : homeView();
+  if (fid){ const n = document.getElementById(fid); if (n){ n.focus({preventScroll:true}); if (sel) try { n.setSelectionRange(sel[0], sel[1]); } catch {} } }
+}
+function setupView(){
+  return `<div class="brand"><div class="logo" aria-hidden="true">🐱</div><h1>Trip Kitty</h1></div>
+    <div class="card setup stack"><b>Almost there: connect the database</b>
+      <p style="margin:0">${window.supabase ? "Open <code>index.html</code> and paste your Supabase project URL and anon key into the two lines near the top marked <code>PASTE</code>." : "The database library didn't load. Check your internet connection and reload."}</p>
+      <p class="muted" style="margin:0;font-size:14px">Full steps are in README.md.</p></div>`;
+}
+function homeView(){
+  const list = myTrips();
+  const cards = list.length ? list.map(t => `
+    <button class="pass" data-act="open" data-id="${esc(t.id)}">
+      <span class="stub">${esc(t.emoji||"✈️")}</span>
+      <span class="body"><h3>${esc(t.name)}</h3>
+        <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
+    </button>`).join("")
+    : `<div class="empty"><span class="big">🗺️</span><b>No trips on this phone yet</b><p class="muted">Start a trip, or open the link a friend sent you. Trips you open are remembered here.</p></div>`;
+  return `
+    <div class="brand"><div class="logo" aria-hidden="true">🐱</div><h1>Trip Kitty</h1></div>
+    <p class="tag muted">The shared money pot for your adventures. Log it, split it, forget the awkward maths. No sign-up needed.</p>
+    <div class="stack">${cards}</div>
+    <button class="btn primary fab" data-act="new-trip">＋ New trip</button>`;
+}
+function tripView(){
+  const t = trip();
+  if (!t){
+    const msg = !S.loaded ? ["🧳","Loading trip…",""] : S.loadError ? ["📡","Can't reach the trip right now.", esc(S.loadError)] : ["🧭","This trip isn't here.","It may have been deleted, or the link is incomplete."];
+    return `<div class="topbar"><button class="icon-btn" data-act="home" aria-label="All trips">←</button></div>
+      <div class="empty"><span class="big">${msg[0]}</span><b>${msg[1]}</b>${msg[2] ? `<p class="muted">${msg[2]}</p>` : ""}${S.loaded ? `<div class="row" style="justify-content:center;flex-wrap:wrap"><button class="btn primary" data-act="retry">Try again</button>${!S.loadError ? `<button class="btn ghost" data-act="forget">Remove from my trips</button>` : ""}</div>` : ""}</div>`;
+  }
+  const exps = S.expenses, real = exps.filter(e => e.type !== "settle");
+  const total = real.reduce((s, e) => s + e.amount, 0);
+  const m = me(), {net, f} = balances(t, exps);
+  let myLine = "";
+  if (m && net[m] !== undefined){
+    const v = net[m] / f;
+    myLine = `<div class="mybal num">${!net[m] ? "You're all square 🤝" : v > 0 ? `You get back ${fmt(v, t.currency)} 🤑` : `You owe ${fmt(-v, t.currency)} 😅`}</div>`;
+  }
+  const tabs = [["expenses","Expenses"],["balances","Balances"],["stats","Stats"],["activity","Activity"],["trip","Trip"]];
+  let body = "";
+  if (S.tab === "expenses") body = expensesTab(t, exps, m);
+  if (S.tab === "balances") body = balancesTab(t, net, f);
+  if (S.tab === "stats") body = statsTab(t, real, total);
+  if (S.tab === "activity") body = activityTab(t);
+  if (S.tab === "trip") body = settingsTab(t, exps);
+  return `
+    <div class="topbar">
+      <button class="icon-btn" data-act="home" aria-label="All trips">←</button>
+      <h2 class="grow">${esc(t.name)}</h2>
+      <button class="btn sun sm" data-act="share">🔗 Share</button>
+    </div>
+    ${S.loadError ? `<div class="banner">Offline or can't sync. Showing the last data loaded.</div>` : ""}
+    <section class="hero">
+      <span class="emoji" aria-hidden="true">${esc(t.emoji||"✈️")}</span>
+      <div class="sub">Total trip spend</div>
+      <div class="total num">${fmt(total, t.currency)}</div>
+      <div class="sub num">${real.length} expense${real.length===1?"":"s"} · ${(t.people||[]).length} traveller${(t.people||[]).length===1?"":"s"}</div>
+      <div class="me-row" role="group" aria-label="Which one are you?">
+        ${(t.people||[]).map(p => `<button class="me-chip ${m===p.id?"on":""}" data-act="me" data-id="${esc(p.id)}">${face(p)}${esc(p.name)}</button>`).join("")}
+      </div>
+      ${myLine || `<div class="mybal" style="font-weight:500;font-size:14px;opacity:.85">Tap your name so we can show your balance.</div>`}
+    </section>
+    <nav class="tabs">${tabs.map(([k,l]) => `<button class="${S.tab===k?"on":""}" data-act="tab" data-tab="${k}">${l}</button>`).join("")}</nav>
+    ${body}
+    <button class="btn primary fab" data-act="add">＋ Add expense</button>`;
+}
+function filtered(t, exps){
+  const q = S.q.trim().toLowerCase();
+  return exps.filter(e => {
+    if (S.fCat && (e.type === "settle" || e.cat !== S.fCat)) return false;
+    if (S.fMethod && e.method !== S.fMethod) return false;
+    if (S.fWho && e.payer !== S.fWho && !(e.shares||{})[S.fWho]) return false;
+    if (!q) return true;
+    const hay = [e.desc, e.notes, e.method, cat(e.cat).l, person(t, e.payer).name, e.cur, String(e.amount), String(e.origAmount ?? ""),
+      ...(e.inputs && e.inputs.items ? e.inputs.items.map(i => i.name) : []), e.type === "settle" ? "settle pay back" : ""].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+}
+function expensesTab(t, exps, m){
+  if (!S.loaded) return `<div class="empty"><span class="big">🧾</span><b>Fetching receipts…</b></div>`;
+  if (!exps.length) return `<div class="empty"><span class="big">🍦</span><b>Nothing spent yet</b><p class="muted">Bought the first round? Tap “Add expense” and the kitty starts counting.</p></div>`;
+  const methods = [...new Set([...(t.methods||[]), ...exps.map(e => e.method).filter(Boolean)])];
+  return `<div class="filters">
+      <input class="input" id="q" type="search" placeholder="🔍 Search expenses, notes, items…" value="${esc(S.q)}" autocomplete="off">
+      <div class="fsel">
+        <select id="f-cat" class="${S.fCat?"on":""}" aria-label="Filter by category"><option value="">All categories</option>${CATS.map(c => `<option value="${c.k}" ${S.fCat===c.k?"selected":""}>${c.e} ${c.l}</option>`).join("")}</select>
+        <select id="f-who" class="${S.fWho?"on":""}" aria-label="Filter by person"><option value="">Everyone</option>${(t.people||[]).map(p => `<option value="${esc(p.id)}" ${S.fWho===p.id?"selected":""}>${esc(p.emoji)} ${esc(p.name)}</option>`).join("")}</select>
+        <select id="f-method" class="${S.fMethod?"on":""}" aria-label="Filter by payment method"><option value="">All methods</option>${methods.map(x => `<option ${S.fMethod===x?"selected":""}>${esc(x)}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div id="exp-list">${expList(t, exps, m)}</div>`;
+}
+function expList(t, exps, m){
+  const list = filtered(t, exps), isF = S.q || S.fCat || S.fWho || S.fMethod;
+  let head = "";
+  if (isF){ const sum = list.filter(e => e.type !== "settle").reduce((s,e) => s + e.amount, 0);
+    head = `<div class="row" style="margin-top:8px"><span class="note grow">${list.length} match${list.length===1?"":"es"} · ${fmt(sum, t.currency)}</span><button class="btn sm ghost" data-act="clear-filters">Clear</button></div>`; }
+  if (!list.length) return head + `<div class="empty" style="margin-top:10px"><span class="big">🔎</span><b>Nothing matches</b><p class="muted">Try another word or clear the filters.</p></div>`;
+  const byDay = {};
+  [...list].sort((a,b) => (b.date||"").localeCompare(a.date||"") || (b.createdAt||0)-(a.createdAt||0)).forEach(e => (byDay[e.date||""] ||= []).push(e));
+  return head + Object.entries(byDay).map(([d, items]) => {
+    const dayTotal = items.filter(e=>e.type!=="settle").reduce((s,e)=>s+e.amount,0);
+    return `<div class="row day"><span class="label grow">${esc(niceDate(d))}</span><span class="label num">${dayTotal ? fmt(dayTotal, t.currency) : ""}</span></div>` +
+    items.map(e => {
+      const payer = person(t, e.payer);
+      if (e.type === "settle"){
+        const to = person(t, Object.keys(e.shares||{})[0]);
+        return `<button class="exp settle" data-act="edit" data-id="${esc(e.id)}"><span class="cat">🤝</span><span class="grow"><div class="t">${esc(payer.name)} paid back ${esc(to.name)}</div><div class="m">${esc(e.method||"")}</div></span><span class="amt num">${fmt(e.amount, t.currency)}</span></button>`;
+      }
+      const c = cat(e.cat);
+      let mine = "";
+      if (m){ const share = (e.shares||{})[m] || 0, paid = e.payer === m ? e.amount : 0, d = round(paid - share, 6);
+        if (Math.abs(d) > 0.0001) mine = `<div class="mine num ${d>0?"pos":"neg"}">${d>0?"you lent":"you owe"} ${fmt(Math.abs(d), t.currency)}</div>`;
+        else if (share || paid) mine = `<div class="mine muted">settled</div>`; else mine = `<div class="mine muted">not involved</div>`; }
+      const orig = e.cur && e.cur !== t.currency ? `<div class="mine muted num">${fmt(e.origAmount, e.cur)}</div>` : "";
+      return `<button class="exp" data-act="edit" data-id="${esc(e.id)}">
+        <span class="cat" aria-hidden="true">${c.e}</span>
+        <span class="grow"><div class="t">${esc(e.desc || c.l)}${e.receipt ? " 🧾" : ""}${e.notes ? " 📝" : ""}</div><div class="m">${esc(payer.name)} paid · ${esc(e.method||"")} · ${splitLabel(e)}</div></span>
+        <span><div class="amt num">${fmt(e.amount, t.currency)}</div>${orig}${mine}</span></button>`;
+    }).join("");
+  }).join("");
+}
+function balancesTab(t, net, f){
+  const people = t.people || [];
+  const max = Math.max(1, ...Object.values(net).map(Math.abs));
+  const rows = people.map(p => { const v = net[p.id]||0, w = Math.abs(v)/max*50;
+    return `<div class="bal">${face(p)}<div><div class="row"><b class="grow">${esc(p.name)}</b><span class="num ${v>0?"pos":v<0?"neg":"muted"}" style="font-weight:700">${v>0?"gets back ":v<0?"owes ":""}${v?fmt(Math.abs(v)/f, t.currency):"square"}</span></div>
+      <div class="bar mid" style="margin-top:6px"><i style="${v>=0?`left:50%;width:${w}%;background:var(--good)`:`right:50%;width:${w}%;background:var(--bad)`}"></i></div></div></div>`; }).join("");
+  const plan = settlePlan(net);
+  const planHtml = plan.length ? plan.map(s => { const a = person(t, s.from), b = person(t, s.to);
+    return `<div class="settle-row">${face(a)}<div class="grow"><b>${esc(a.name)}</b> pays <b>${esc(b.name)}</b><div class="num" style="font-family:var(--display);font-weight:800;font-size:20px">${fmt(s.v/f, t.currency)}</div></div>
+      <button class="btn sm sun" data-act="settle" data-from="${esc(s.from)}" data-to="${esc(s.to)}" data-v="${s.v}">Mark paid</button></div>`; }).join("")
+    : `<p class="muted" style="margin:6px 0 0">Everyone's square. Nobody owes anybody anything. 🎉</p>`;
+  return `<div class="stack"><div class="card"><div class="label" style="margin-bottom:4px">Who's up, who's down</div>${rows || `<p class="muted">Add travellers in the Trip tab.</p>`}</div>
+    <div class="card"><div class="label">Settle up in ${plan.length || "zero"} move${plan.length===1?"":"s"}</div>${planHtml}</div>
+    <p class="muted" style="font-size:13px;margin:0">Debts are simplified: the fewest payments that square everyone up.</p></div>`;
+}
+function niceMax(v){ if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); for (const m of [1,1.5,2,2.5,3,4,5,6,8,10]) if (m*p >= v) return m*p; return 10*p; }
+function dailyChart(t, real){
+  const m = {}; real.forEach(e => { if (e.date) m[e.date] = (m[e.date]||0) + e.amount; });
+  const keys = Object.keys(m).sort(); if (keys.length < 2) return "";
+  const all = []; const d = new Date(keys[0]+"T12:00:00"), end = new Date(keys[keys.length-1]+"T12:00:00");
+  while (d <= end && all.length < 1000){ all.push(iso(d)); d.setDate(d.getDate()+1); }
+  const days = all.slice(-31), W = 340, H = 170, L = 4, R = 4, T = 22, B = 22, pw = W-L-R, ph = H-T-B;
+  const top = niceMax(Math.max(...days.map(k => m[k]||0))), slot = pw / days.length, bw = Math.max(2, Math.min(26, slot - 2));
+  const y = v => T + ph - v/top*ph;
+  let svg = `<line x1="${L}" x2="${W-R}" y1="${y(top)}" y2="${y(top)}" style="stroke:var(--line)" stroke-dasharray="3 3"/>
+    <line x1="${L}" x2="${W-R}" y1="${y(top/2)}" y2="${y(top/2)}" style="stroke:var(--line)" stroke-dasharray="3 3"/>
+    <text x="${L}" y="${y(top)-5}" font-size="11" style="fill:var(--muted)">${esc(fmt(top, t.currency))}</text>
+    <text x="${L}" y="${y(top/2)-5}" font-size="11" style="fill:var(--muted)">${esc(fmt(top/2, t.currency))}</text>`;
+  days.forEach((k, i) => { const v = m[k]||0, x = L + i*slot + (slot-bw)/2, yb = T + ph, h = yb - y(v), r = Math.min(4, bw/2, h);
+    const label = `${niceDate(k)} · ${fmt(v, t.currency)}`;
+    svg += `<rect class="hit" x="${L+i*slot}" y="${T}" width="${slot}" height="${ph+B}" data-act="bar" data-label="${esc(label)}" data-i="${i}"><title>${esc(label)}</title></rect>`;
+    if (h > 0) svg += `<path class="b" data-bi="${i}" style="fill:var(--accent);pointer-events:none" d="M${x},${yb} V${yb-h+r} Q${x},${yb-h} ${x+r},${yb-h} H${x+bw-r} Q${x+bw},${yb-h} ${x+bw},${yb-h+r} V${yb} Z"/>`; });
+  svg += `<line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" style="stroke:var(--muted)" stroke-width="1"/>
+    <text x="${L}" y="${H-5}" font-size="11" style="fill:var(--muted)">${esc(new Date(days[0]+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short"}))}</text>
+    <text x="${W-R}" y="${H-5}" font-size="11" text-anchor="end" style="fill:var(--muted)">${esc(new Date(days[days.length-1]+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short"}))}</text>`;
+  return `<div class="card chart"><div class="row" style="margin-bottom:6px"><span class="label grow">Daily spend${all.length > 31 ? " · last 31 days" : ""}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily spend bar chart">${svg}</svg>
+    <div class="note muted num" id="chart-cap" style="margin-top:6px">Tap a bar to see that day's total.</div></div>`;
+}
+function statsTab(t, real, total){
+  if (!real.length) return `<div class="empty"><span class="big">📊</span><b>No numbers to crunch yet</b><p class="muted">Stats appear after the first expense.</p></div>`;
+  const group = (key) => { const m = {}; real.forEach(e => { const k = key(e); m[k] = (m[k]||0) + e.amount; }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
+  const block = (title, rows, label) => `<div class="card"><div class="label" style="margin-bottom:6px">${title}</div>${rows.map(([k,v]) =>
+    `<div class="stat"><span>${label(k)}</span><span class="num" style="font-weight:700">${fmt(v, t.currency)} <span class="muted" style="font-weight:500">${Math.round(v/total*100)}%</span></span><div class="bar"><i style="left:0;width:${v/rows[0][1]*100}%;background:var(--accent)"></i></div></div>`).join("")}</div>`;
+  const days = new Set(real.map(e=>e.date)).size;
+  const consumed = {}; real.forEach(e => Object.entries(e.shares||{}).forEach(([id, v]) => consumed[id] = (consumed[id]||0) + v));
+  const big = v => `<div class="num" style="font-family:var(--display);font-weight:800;font-size:20px">${fmt(v, t.currency)}</div>`;
+  const pl = k => { const p = person(t,k); return `<span class="row" style="gap:8px">${face(p)}${esc(p.name)}</span>`; };
+  return `<div class="stack">
+    <div class="card row" style="justify-content:space-around;text-align:center;flex-wrap:wrap">
+      <div><div class="label">Per day</div>${big(total/Math.max(1,days))}</div>
+      <div><div class="label">Per person</div>${big(total/Math.max(1,(t.people||[]).length))}</div>
+      <div><div class="label">Biggest</div>${big(Math.max(...real.map(e=>e.amount)))}</div>
+    </div>
+    ${dailyChart(t, real)}
+    ${block("By category", group(e=>e.cat), k => { const c = cat(k); return c.e + " " + c.l; })}
+    ${block("By payment method", group(e=>e.method||"Other"), k => esc(k))}
+    ${block("Who paid upfront", group(e=>e.payer), pl)}
+    ${block("Each person's share of the spending", Object.entries(consumed).sort((a,b)=>b[1]-a[1]), pl)}
+  </div>`;
+}
+function activityTab(t){
+  if (!S.activity.length) return `<div class="empty"><span class="big">📜</span><b>No activity yet</b><p class="muted">Every add, edit, delete and pay-back shows up here with who did it.</p></div>`;
+  const icon = {add:"➕", edit:"✏️", delete:"🗑️", settle:"🤝", people:"👥", trip:"⚙️"};
+  return `<div class="card">${S.activity.map(a => `<div class="act"><span class="ic">${icon[a.action]||"•"}</span><div class="grow"><div><b>${esc(who(a.who))}</b> ${esc(a.text)}</div><div class="note muted">${esc(ago(a.at))}</div></div></div>`).join("")}</div>
+    <p class="muted" style="font-size:13px">Names come from the “Who are you?” pick on each phone.</p>`;
+}
+function settingsTab(t, exps){
+  const used = new Set(); exps.forEach(e => { used.add(e.payer); Object.keys(e.shares||{}).forEach(id => used.add(id)); });
+  const rates = Object.entries(t.rates||{}).filter(([c]) => c !== t.currency);
+  return `<div class="stack">
+    <div class="card"><div class="label" style="margin-bottom:6px">Travellers</div>
+      ${(t.people||[]).map(p => `<div class="person-edit">${face(p)}<b class="grow">${esc(p.name)}</b>${used.has(p.id) ? `<span class="muted" style="font-size:13px">has expenses</span>` : `<button class="btn sm ghost" data-act="rm-person" data-id="${esc(p.id)}">Remove</button>`}</div>`).join("")}
+      <form class="row" style="margin-top:10px" data-form="add-person"><input class="input grow" id="new-person" placeholder="Add a traveller" maxlength="24"><button class="btn primary">Add</button></form>
+    </div>
+    <div class="card"><div class="label" style="margin-bottom:8px">Payment methods</div>
+      <div class="chips">${(t.methods||[]).map((x,i) => `<span class="chip">${esc(x)} <button data-act="rm-method" data-i="${i}" aria-label="Remove ${esc(x)}" style="border:0;background:none;padding:0 0 0 2px;font-weight:800">×</button></span>`).join("")}</div>
+      <form class="row" style="margin-top:10px" data-form="add-method"><input class="input grow" id="new-method" placeholder="e.g. 🟢 Wise card" maxlength="24"><button class="btn primary">Add</button></form>
+    </div>
+    <div class="card"><div class="label" style="margin-bottom:4px">Exchange rates</div>
+      <p class="muted" style="margin:0 0 8px;font-size:13px">Saved when you add a foreign-currency expense. Changing a rate here applies to new expenses only.</p>
+      ${rates.length ? `<form class="stack" style="gap:8px" data-form="rates">${rates.map(([c, r]) => `<div class="rate-row"><span>1 ${esc(c)} =</span><input class="input num" id="rate-${esc(c)}" data-rate="${esc(c)}" inputmode="decimal" value="${esc(r)}"><span>${esc(t.currency)}</span></div>`).join("")}<button class="btn primary">Save rates</button></form>` : `<p class="muted" style="margin:0;font-size:14px">None yet. Pick a different currency when adding an expense.</p>`}
+    </div>
+    <div class="card"><div class="label" style="margin-bottom:8px">Trip details</div>
+      <form class="stack" data-form="trip-details">
+        <input class="input" id="trip-name-edit" value="${esc(t.name)}" maxlength="40" aria-label="Trip name">
+        <select class="input" id="trip-cur-edit" aria-label="Home currency">${curList(t.currency).map(c => `<option ${c===t.currency?"selected":""}>${c}</option>`).join("")}</select>
+        <p class="muted" style="margin:0;font-size:13px">Changing the home currency changes the symbol only. Amounts aren't converted.</p>
+        <button class="btn primary">Save details</button>
+      </form>
+    </div>
+    <button class="btn ghost block" data-act="export">📄 Export to spreadsheet (CSV)</button>
+    <button class="btn ghost block" data-act="forget">Remove from this phone's list</button>
+    <button class="btn danger block" data-act="del-trip">Delete this trip for everyone</button>
+  </div>`;
+}
+
+/* ---------- sheets ---------- */
+let draft = null;
+function openSheet(html){ const old = $(".sheet"), st = old ? old.scrollTop : 0, na = old ? " noanim" : "";
+  $("#sheet-root").innerHTML = `<div class="scrim${na}" data-act="scrim"><div class="sheet${na}" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
+  if (old) $(".sheet").scrollTop = st; document.body.style.overflow = "hidden"; }
+function closeSheet(){ if (draft && draft.receiptUrl && draft.receiptUrl.startsWith("blob:")) URL.revokeObjectURL(draft.receiptUrl);
+  $("#sheet-root").innerHTML = ""; draft = null; document.body.style.overflow = ""; }
+
+function whoAmISheet(){
+  const t = trip(); if (!t) return;
+  draft = {kind:"who"};
+  openSheet(`<h2>Who are you? 👋</h2><p class="muted" style="margin:-6px 0 14px">So we can show your balance and sign your changes in the activity log. You can change this any time.</p>
+    <div class="chips">${(t.people||[]).map(p => `<button class="chip" data-act="pick-me" data-id="${esc(p.id)}" style="font-size:16px;padding:10px 14px">${face(p)}${esc(p.name)}</button>`).join("")}</div>
+    <button class="btn ghost block" data-act="close" style="margin-top:16px">I'm just looking</button>`);
+}
+function newTripSheet(){
+  draft = { kind:"trip", name:"", emoji:TRIP_EMOJI[0], currency: lsGet("tk-cur") || "USD", people:[], methods:[...DEFAULT_METHODS] };
+  renderTripSheet();
+}
+function renderTripSheet(){
+  const d = draft;
+  openSheet(`<h2>Where are we going? ✈️</h2>
+    <form class="stack" data-form="create-trip">
+      <div class="field"><label class="label" for="trip-name">Trip name</label><input class="input" id="trip-name" maxlength="40" placeholder="Bali with the besties" value="${esc(d.name)}" required></div>
+      <div class="field"><span class="label">Pick a vibe</span><div class="emoji-pick">${TRIP_EMOJI.map(e => `<button type="button" class="${d.emoji===e?"on":""}" data-act="trip-emoji" data-e="${e}">${e}</button>`).join("")}</div></div>
+      <div class="field"><label class="label" for="trip-cur">Home currency (balances are shown in this)</label><select class="input" id="trip-cur">${curList(d.currency).map(c => `<option ${c===d.currency?"selected":""}>${c}</option>`).join("")}</select></div>
+      <div class="field"><span class="label">Who's coming? (you first)</span>
+        <div class="chips">${d.people.map((p,i) => `<span class="chip">${face(p)}${esc(p.name)} <button type="button" data-act="draft-rm-person" data-i="${i}" aria-label="Remove ${esc(p.name)}" style="border:0;background:none;padding:0;font-weight:800">×</button></span>`).join("") || `<span class="muted" style="font-size:14px">Add yourself first, then your crew.</span>`}</div>
+        <div class="row"><input class="input grow" id="person-name" maxlength="24" placeholder="Name"><button type="button" class="btn" data-act="draft-add-person">Add</button></div>
+      </div>
+      <button class="btn primary block" ${d.people.length?"":"disabled"}>Start the kitty 🐱</button>
+      <button type="button" class="btn ghost block" data-act="close">Cancel</button>
+    </form>`);
+}
+function makePerson(name, idx){ return { id:newId(8), name, emoji:PERSON_EMOJI[idx % PERSON_EMOJI.length], color:COLORS[idx % COLORS.length] }; }
+
+function expenseSheet(e){
+  const t = trip(); if (!t) return;
+  const m = me(), ids = (t.people||[]).map(p=>p.id);
+  if (e){
+    const inp = e.inputs || {}, cur = e.cur || t.currency;
+    draft = { kind:"exp", id:e.id, type:e.type||"exp", amount:String(e.origAmount ?? e.amount), cur, rate:String(e.rate ?? (t.rates||{})[cur] ?? ""),
+      desc:e.desc||"", cat:e.cat||"other", payer:e.payer, method:e.method||"", notes:e.notes||"", date:e.date||today(),
+      mode:e.mode||"equal", among:new Set(inp.among || (!e.mode || e.mode==="equal" ? Object.keys(e.shares||{}) : ids)),
+      exact:{...(inp.exact||{})}, percent:{...(inp.percent||{})}, shareN:{...(inp.shares||{})},
+      items:(inp.items||[]).map(i => ({name:i.name||"", amount:String(i.amount??""), who:[...(i.who||[])]})),
+      receipt:e.receipt||null, receiptUrl:receiptUrl(e.receipt), createdBy:e.createdBy, createdAt:e.createdAt, confirmDel:false };
+    if (e.mode === "exact" && !inp.exact) for (const [id,v] of Object.entries(e.shares||{})) draft.exact[id] = String(v);
+  } else {
+    const lastCur = lsGet("tk-lastcur-" + t.id);
+    const cur = lastCur && validCur(lastCur) ? lastCur : t.currency;
+    draft = { kind:"exp", id:null, type:"exp", amount:"", cur, rate:String((t.rates||{})[cur] ?? ""), desc:"", cat:"food",
+      payer: ids.includes(m) ? m : ids[0], method:(t.methods||[])[0]||"", notes:"", date:today(),
+      mode:"equal", among:new Set(ids), exact:{}, percent:{}, shareN:{}, items:[], receipt:null, receiptUrl:null, confirmDel:false };
+  }
+  renderExpenseSheet(true);
+}
+function renderExpenseSheet(focus){
+  const t = trip(), d = draft;
+  if (!t || !d) return;
+  const people = t.people||[], settle = d.type === "settle", foreign = d.cur !== t.currency;
+  const receiptBlock = settle ? "" : (d.receiptUrl ? `
+      <div class="receipt">
+        <button type="button" class="thumb" data-act="view-receipt" aria-label="View receipt"><img src="${esc(d.receiptUrl)}" alt="Receipt photo"></button>
+        <div class="grow stack" style="gap:6px">
+          <span class="note muted">${d.uploading ? `<span class="spin">⏳</span> Uploading photo…` : d.receipt ? "Receipt attached 🧾" : "Photo didn't upload. Remove it and try again."}</span>
+          <div class="row" style="flex-wrap:wrap;gap:6px"><button type="button" class="btn sm ghost" data-act="rm-receipt">Remove</button></div>
+        </div>
+      </div>` : `<label class="btn ghost block file-btn">📷 Attach receipt photo<input type="file" id="receipt-file" accept="image/*"></label>`);
+  openSheet(`<h2>${settle ? "Pay-back 🤝" : d.id ? "Edit expense ✏️" : "New expense 💸"}</h2>
+    <form class="stack" data-form="save-exp">
+      ${receiptBlock}
+      <div class="field"><label class="label" for="exp-amount">Amount</label>
+        <div class="amount-row"><input class="amount-in num" id="exp-amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(d.amount)}">
+        ${settle ? `<span class="cur-sel" style="display:grid;place-items:center">${esc(t.currency)}</span>` : `<select class="cur-sel" id="exp-cur" aria-label="Currency">${curList(t.currency, d.cur).map(c => `<option ${c===d.cur?"selected":""}>${c}</option>`).join("")}</select>`}</div>
+        ${foreign && !settle ? `<div class="rate-row"><span>1 ${esc(d.cur)} =</span><input class="input num" id="exp-rate" inputmode="decimal" placeholder="rate" value="${esc(d.rate)}"><span>${esc(t.currency)}</span><span class="muted num" id="conv-line">${convLine()}</span></div>` : ""}
+      </div>
+      ${settle ? "" : `
+      <div class="field"><label class="label" for="exp-desc">What was it?</label><input class="input" id="exp-desc" maxlength="60" placeholder="Sunset cocktails" value="${esc(d.desc)}"></div>
+      <div class="field"><span class="label">Category</span><div class="chips">${CATS.map(c => `<button type="button" class="chip ${d.cat===c.k?"on":""}" data-act="d-cat" data-v="${c.k}">${c.e} ${c.l}</button>`).join("")}</div></div>`}
+      <div class="field"><span class="label">Who paid?</span><div class="chips">${people.map(p => `<button type="button" class="chip ${d.payer===p.id?"on":""}" data-act="d-payer" data-v="${esc(p.id)}">${face(p)}${esc(p.name)}</button>`).join("")}</div></div>
+      <div class="field"><span class="label">Paid with</span><div class="chips">${(t.methods||[]).map(x => `<button type="button" class="chip ${d.method===x?"on":""}" data-act="d-method" data-v="${esc(x)}">${esc(x)}</button>`).join("") || `<span class="muted">Add methods in the Trip tab.</span>`}</div></div>
+      ${settle ? "" : `
+      <div class="field"><span class="label">Split</span>
+        <div class="seg" role="group" aria-label="Split type">${MODES.map(([k,l]) => `<button type="button" class="${d.mode===k?"on":""}" data-act="d-mode" data-v="${k}">${l}</button>`).join("")}</div>
+        <div id="split-box">${splitBox()}</div></div>`}
+      <div class="field"><label class="label" for="exp-date">Date</label><input class="input" type="date" id="exp-date" value="${esc(d.date)}"></div>
+      ${settle ? "" : `<div class="field"><label class="label" for="exp-notes">Notes</label><textarea class="input" id="exp-notes" maxlength="500" placeholder="Table 12, booked by Sam. Tip included.">${esc(d.notes)}</textarea></div>`}
+      ${d.id && d.createdBy ? `<p class="note muted" style="margin:0">Added by ${esc(who(d.createdBy))}${d.createdAt ? " · " + esc(ago(d.createdAt)) : ""}</p>` : ""}
+      <div id="exp-err" class="note neg" role="alert"></div>
+      <button class="btn primary block">${d.id ? "Save changes" : "Add to the kitty"}</button>
+      ${d.id ? `<button type="button" class="btn danger block" data-act="d-del">${d.confirmDel ? "Tap again to delete" : "Delete"}</button>` : ""}
+      <button type="button" class="btn ghost block" data-act="close">Cancel</button>
+    </form>`);
+  if (focus && !d.id) setTimeout(() => { const a = $("#exp-amount"); a && a.focus(); }, 60);
+}
+function convLine(){ const t = trip(), d = draft, r = parseAmt(d.rate), a = parseAmt(d.amount);
+  return r > 0 && a > 0 ? "= " + fmt(a * r, t.currency) : r > 0 ? "" : "enter a rate"; }
+function splitBox(){
+  const t = trip(), d = draft, people = t.people||[], r = calcSplit(d, t);
+  const prev = id => r.prevE[id] ? fmt(r.prevE[id]/r.fE, d.cur) : "";
+  const status = `<div class="note num ${r.err ? "neg" : "pos"}" id="split-status" style="margin-top:4px">${esc(r.err || r.status)}</div>`;
+  if (d.mode === "equal"){
+    return `<div class="chips">${people.map(p => { const on = d.among.has(p.id);
+      return `<button type="button" class="chip ${on?"on":""}" data-act="d-among" data-v="${esc(p.id)}">${face(p)}${esc(p.name)}${on && r.totalE ? ` <small class="num">${prev(p.id)}</small>` : ""}</button>`; }).join("")}</div>
+      <div class="row" style="margin-top:6px"><button type="button" class="btn sm ghost" data-act="d-all">Everyone</button><span class="grow">${status}</span></div>`;
+  }
+  if (d.mode === "items"){
+    return `<div class="stack" style="gap:8px">${d.items.map((it, i) => `
+      <div class="item">
+        <div class="r"><input class="input" id="it-n-${i}" data-item-name="${i}" maxlength="40" placeholder="Item" value="${esc(it.name)}" aria-label="Item name">
+          <input class="input num" id="it-a-${i}" data-item-amt="${i}" inputmode="decimal" placeholder="0" value="${esc(it.amount)}" aria-label="Item price" style="text-align:right">
+          <button type="button" class="icon-btn" style="width:34px;height:34px;box-shadow:none;background:var(--chip);font-size:16px" data-act="item-rm" data-i="${i}" aria-label="Remove item">×</button></div>
+        <div class="who" role="group" aria-label="Who had this">${people.map(p => `<button type="button" class="${it.who.includes(p.id)?"on":""}" data-act="item-who" data-i="${i}" data-v="${esc(p.id)}" aria-label="${esc(p.name)}" aria-pressed="${it.who.includes(p.id)}">${face(p)}</button>`).join("")}</div>
+      </div>`).join("")}
+      <button type="button" class="btn sm ghost" data-act="item-add">＋ Add item</button>
+      <div class="chips">${people.map(p => `<span class="chip">${face(p)}${esc(p.name)} <small class="num" data-prev="${esc(p.id)}">${prev(p.id)}</small></span>`).join("")}</div>
+      ${status}</div>`;
+  }
+  const key = d.mode === "shares" ? "shareN" : d.mode, unit = d.mode === "percent" ? "%" : d.mode === "shares" ? "×" : d.cur;
+  return `<div class="stack" style="gap:10px">${people.map(p => `
+    <div class="mrow">${face(p)}<label for="m-${esc(p.id)}"><b>${esc(p.name)}</b></label>
+      <input class="input num" id="m-${esc(p.id)}" data-mi="${key}" data-pid="${esc(p.id)}" inputmode="decimal" placeholder="0 ${esc(unit)}" value="${esc(d[key][p.id]||"")}">
+      ${d.mode !== "exact" ? `<span class="prev muted num" data-prev="${esc(p.id)}">${prev(p.id)}</span>` : ""}</div>`).join("")}
+    ${status}</div>`;
+}
+function refreshSplit(){
+  const box = $("#split-box"); if (!box || !draft) return;
+  if (draft.mode === "equal"){ box.innerHTML = splitBox(); return; }
+  const t = trip(), r = calcSplit(draft, t), st = $("#split-status");
+  if (st){ st.className = "note num " + (r.err ? "neg" : "pos"); st.textContent = r.err || r.status; }
+  box.querySelectorAll("[data-prev]").forEach(el => { const v = r.prevE[el.dataset.prev]; el.textContent = v ? fmt(v/r.fE, draft.cur) : ""; });
+}
+function prefillMode(mode){
+  const t = trip(), d = draft, ids = (t.people||[]).map(p=>p.id), base = [...d.among].filter(id => ids.includes(id));
+  const among = base.length ? base : ids;
+  if (mode === "exact" && !Object.values(d.exact).some(v => parseAmt(v))){
+    const r = calcSplit({...d, mode:"equal", among:new Set(among)}, t); d.exact = {};
+    for (const [id, v] of Object.entries(r.prevE)) d.exact[id] = String(v / r.fE);
+  }
+  if (mode === "percent" && !Object.values(d.percent).some(v => parseAmt(v))){
+    d.percent = {}; const n = among.length, each = Math.floor(10000 / n) / 100;
+    among.forEach((id, i) => d.percent[id] = String(i === n-1 ? round(100 - each*(n-1), 2) : each));
+  }
+  if (mode === "shares" && !Object.values(d.shareN).some(v => parseAmt(v))){ d.shareN = {}; among.forEach(id => d.shareN[id] = "1"); }
+  if (mode === "items" && !d.items.length) d.items = [{name:"", amount:"", who:[...ids]}];
+}
+
+/* ---------- receipts ---------- */
+async function shrink(file){
+  try {
+    const bmp = await createImageBitmap(file);
+    const s = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas"); c.width = Math.round(bmp.width*s); c.height = Math.round(bmp.height*s);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(res => c.toBlob(res, "image/jpeg", 0.82));
+    return blob || file;
+  } catch { return file; }
+}
+async function onReceiptFile(file){
+  if (!file || !draft) return;
+  syncExpDraft();
+  const my = draft, blob = await shrink(file);
+  if (my.receiptUrl && my.receiptUrl.startsWith("blob:")) URL.revokeObjectURL(my.receiptUrl);
+  my.receiptUrl = URL.createObjectURL(blob); my.receipt = null; my.uploading = true;
+  if (draft === my) renderExpenseSheet();
+  const type = ["image/jpeg","image/png","image/webp"].includes(blob.type) ? blob.type : "image/jpeg";
+  const path = `${S.tripId}/${newId(16)}.${type.split("/")[1].replace("jpeg","jpg")}`;
+  try { check(await sb(S.tripId).storage.from("receipts").upload(path, blob, {contentType:type, upsert:false})); my.receipt = path; }
+  catch (e){ console.error(e); toast("Couldn't upload the photo. Check your connection."); }
+  my.uploading = false; if (draft === my) renderExpenseSheet();
+}
+
+/* ---------- share & export ---------- */
+function shareSheet(){
+  const t = trip(), link = tripLink(t.id);
+  openSheet(`<h2>Bring the crew 🔗</h2>
+    <div class="stack">
+      <p style="margin:0">Anyone with this link can see and edit <b>${esc(t.name)}</b>. No account needed. Only send it to your travel buddies.</p>
+      <div class="linkbox" id="share-link">${esc(link)}</div>
+      ${navigator.share ? `<button class="btn primary block" data-act="native-share">Send via…</button><button class="btn ghost block" data-act="copy-link">Copy link</button>` : `<button class="btn primary block" data-act="copy-link">Copy link</button>`}
+      <p class="muted" style="margin:0;font-size:13px">Tip: on your phone, open the link and choose “Add to Home Screen” to use Trip Kitty like an app.</p>
+      <button class="btn ghost block" data-act="close">Done</button>
+    </div>`);
+}
+function buildCSV(t, exps){
+  const q = v => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const people = t.people || [];
+  const head = ["Date","Type","Description","Category","Paid by","Payment method",`Amount (${t.currency})`,"Original amount","Original currency","Exchange rate","Split type",...people.map(p => `${p.name} share (${t.currency})`),"Items","Notes","Receipt photo"];
+  const rows = [...exps].sort((a,b) => (a.date||"").localeCompare(b.date||"") || (a.createdAt||0)-(b.createdAt||0)).map(e => {
+    const settle = e.type === "settle";
+    return [e.date, settle ? "Pay-back" : "Expense", settle ? `${person(t,e.payer).name} paid back ${person(t, Object.keys(e.shares||{})[0]).name}` : e.desc, settle ? "" : cat(e.cat).l,
+      person(t, e.payer).name, e.method, e.amount, e.origAmount ?? e.amount, e.cur || t.currency, e.rate ?? 1, settle ? "" : (e.mode || "equal"),
+      ...people.map(p => (e.shares||{})[p.id] ?? ""), (e.inputs && e.inputs.items || []).map(i => `${i.name}: ${i.amount}`).join("; "), e.notes || "", e.receipt ? receiptUrl(e.receipt) : ""];
+  });
+  return [head, ...rows].map(r => r.map(q).join(",")).join("\r\n");
+}
+function exportCSV(){
+  const t = trip(), csv = buildCSV(t, S.expenses), name = (t.name.replace(/[^\w\- ]+/g, "").trim() || "trip") + " expenses.csv";
+  const url = URL.createObjectURL(new Blob(["﻿" + csv], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000); toast("Exported 📄");
+}
+async function copyText(text, el){
+  try { await navigator.clipboard.writeText(text); toast("Copied 📋"); }
+  catch { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Selected. Copy it from here."); }
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click", async ev => {
+  const el = ev.target.closest("[data-act]"); if (!el) return;
+  const act = el.dataset.act, t = trip();
+  if (act === "scrim"){ if (ev.target === el) closeSheet(); return; }
+  if (act === "close") return closeSheet();
+  if (act === "lightbox"){ $("#lightbox-root").innerHTML = ""; return; }
+  if (act === "open") return go(el.dataset.id);
+  if (act === "home") return go(null);
+  if (act === "retry") return loadTrip();
+  if (act === "forget"){ forgetTrip(S.tripId); return go(null); }
+  if (act === "tab"){ S.tab = el.dataset.tab; return render(); }
+  if (act === "new-trip") return newTripSheet();
+  if (act === "add") return expenseSheet(null);
+  if (act === "share") return shareSheet();
+  if (act === "export") return exportCSV();
+  if (act === "native-share"){ try { await navigator.share({title:"Trip Kitty: " + t.name, text:`Join our trip kitty for ${t.name} 🐱`, url:tripLink(t.id)}); } catch {} return; }
+  if (act === "clear-filters"){ S.q = S.fCat = S.fWho = S.fMethod = ""; return render(); }
+  if (act === "bar"){ const cap = $("#chart-cap"); if (cap) cap.textContent = el.dataset.label;
+    document.querySelectorAll(".chart .b").forEach(b => b.classList.toggle("sel", b.dataset.bi === el.dataset.i)); return; }
+  if (act === "me"){ const k = "tk-me-" + t.id; lsSet(k, lsGet(k) === el.dataset.id ? "" : el.dataset.id); return render(); }
+  if (act === "pick-me"){ lsSet("tk-me-" + t.id, el.dataset.id); closeSheet(); toast(`Hi ${person(t, el.dataset.id).name}! 👋`); return render(); }
+  if (act === "edit"){ const e = S.expenses.find(x => x.id === el.dataset.id); if (e) expenseSheet(e); return; }
+  if (act === "copy-link") return copyText($("#share-link").textContent, $("#share-link"));
+  if (act === "trip-emoji"){ syncTripDraft(); draft.emoji = el.dataset.e; return renderTripSheet(); }
+  if (act === "draft-add-person") return addDraftPerson();
+  if (act === "draft-rm-person"){ syncTripDraft(); draft.people.splice(+el.dataset.i, 1); return renderTripSheet(); }
+  if (draft && draft.kind === "exp"){
+    if (act === "view-receipt"){ $("#lightbox-root").innerHTML = `<div class="lightbox" data-act="lightbox" role="dialog" aria-label="Receipt"><img src="${esc(draft.receiptUrl)}" alt="Receipt photo"></div>`; return; }
+    if (act === "rm-receipt"){ syncExpDraft(); if (draft.receiptUrl && draft.receiptUrl.startsWith("blob:")) URL.revokeObjectURL(draft.receiptUrl);
+      draft.receipt = null; draft.receiptUrl = null; return renderExpenseSheet(); }
+    if (act === "d-cat"){ syncExpDraft(); draft.cat = el.dataset.v; return renderExpenseSheet(); }
+    if (act === "d-payer"){ syncExpDraft(); draft.payer = el.dataset.v; return renderExpenseSheet(); }
+    if (act === "d-method"){ syncExpDraft(); draft.method = el.dataset.v; return renderExpenseSheet(); }
+    if (act === "d-mode"){ syncExpDraft(); draft.mode = el.dataset.v; prefillMode(draft.mode); return renderExpenseSheet(); }
+    if (act === "d-among"){ syncExpDraft(); const id = el.dataset.v; draft.among.has(id) ? draft.among.delete(id) : draft.among.add(id); $("#split-box").innerHTML = splitBox(); return; }
+    if (act === "d-all"){ draft.among = new Set((t.people||[]).map(p=>p.id)); $("#split-box").innerHTML = splitBox(); return; }
+    if (act === "item-add"){ syncExpDraft(); draft.items.push({name:"", amount:"", who:(t.people||[]).map(p=>p.id)}); $("#split-box").innerHTML = splitBox(); setTimeout(() => { const n = $("#it-n-" + (draft.items.length-1)); n && n.focus(); }, 30); return; }
+    if (act === "item-rm"){ syncExpDraft(); draft.items.splice(+el.dataset.i, 1); $("#split-box").innerHTML = splitBox(); return; }
+    if (act === "item-who"){ syncExpDraft(); const it = draft.items[+el.dataset.i], id = el.dataset.v;
+      it.who = it.who.includes(id) ? it.who.filter(x => x !== id) : [...it.who, id]; $("#split-box").innerHTML = splitBox(); return; }
+    if (act === "d-del"){
+      if (!draft.confirmDel){ syncExpDraft(); draft.confirmDel = true; el.textContent = "Tap again to delete"; setTimeout(() => { if (draft) draft.confirmDel = false; if (el.isConnected) el.textContent = "Delete"; }, 3000); return; }
+      const id = draft.id, prev = S.expenses.find(e => e.id === id); closeSheet();
+      await write(() => delExpense(id), "Deleted 🗑️",
+        [t.id, "delete", `deleted ${prev && prev.type === "settle" ? "a pay-back" : (prev && prev.desc) || "an expense"}${prev ? " · " + fmt(prev.amount, t.currency) : ""}`]);
+      return;
+    }
+  }
+  if (act === "settle"){
+    const f = 10 ** decimals(t.currency), v = +el.dataset.v / f, a = person(t, el.dataset.from), b = person(t, el.dataset.to);
+    const ok = await write(() => putExpense(newId(), {
+      type:"settle", amount:v, origAmount:v, cur:t.currency, rate:1, payer:el.dataset.from, shares:{[el.dataset.to]: v}, method:(t.methods||[])[0]||"", mode:"exact",
+      date:today(), createdAt:Date.now(), createdBy:me() || null }), "Settled up 🤝", [t.id, "settle", `marked ${a.name} → ${b.name} paid · ${fmt(v, t.currency)}`]);
+    if (ok) confetti(); return;
+  }
+  if (act === "rm-person"){ const p = person(t, el.dataset.id), people = (t.people||[]).filter(x => x.id !== el.dataset.id);
+    await write(() => patchTrip({people}), "Removed", [t.id, "people", `removed ${p.name} from the trip`]); return; }
+  if (act === "rm-method"){ const methods = [...(t.methods||[])]; methods.splice(+el.dataset.i, 1); await write(() => patchTrip({methods})); return; }
+  if (act === "del-trip"){
+    if (el.dataset.armed !== "1"){ el.dataset.armed = "1"; el.textContent = "Tap again: deletes the trip for everyone"; setTimeout(() => { if (el.isConnected){ el.dataset.armed = ""; el.textContent = "Delete this trip for everyone"; } }, 3500); return; }
+    const id = t.id;
+    try { check(await sb(id).from("trips").delete().eq("id", id)); ping(); forgetTrip(id); toast("Trip deleted"); go(null); }
+    catch { toast("Couldn't delete. Check your connection and try again."); }
+    return;
+  }
+});
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Escape"){ if ($("#lightbox-root").innerHTML) $("#lightbox-root").innerHTML = ""; else if (draft) closeSheet(); }
+  if (ev.key === "Enter" && ev.target.id === "person-name"){ ev.preventDefault(); addDraftPerson(); }
+});
+document.addEventListener("input", ev => {
+  const el = ev.target;
+  if (el.id === "q"){ S.q = el.value; const box = $("#exp-list"), t = trip(); if (box && t) box.innerHTML = expList(t, S.expenses, me()); return; }
+  if (!draft || draft.kind !== "exp") return;
+  if (el.id === "exp-amount" || el.id === "exp-rate"){ draft[el.id === "exp-amount" ? "amount" : "rate"] = el.value; const c = $("#conv-line"); if (c) c.textContent = convLine(); refreshSplit(); }
+  if (el.dataset.mi){ draft[el.dataset.mi][el.dataset.pid] = el.value; refreshSplit(); }
+  if (el.dataset.itemName != null){ draft.items[+el.dataset.itemName].name = el.value; }
+  if (el.dataset.itemAmt != null){ draft.items[+el.dataset.itemAmt].amount = el.value; refreshSplit(); }
+});
+document.addEventListener("change", ev => {
+  const el = ev.target, t = trip();
+  if (el.id === "f-cat" || el.id === "f-who" || el.id === "f-method"){
+    S[{"f-cat":"fCat","f-who":"fWho","f-method":"fMethod"}[el.id]] = el.value; return render(); }
+  if (el.id === "receipt-file"){ onReceiptFile(el.files && el.files[0]); return; }
+  if (el.id === "exp-cur" && draft){ syncExpDraft(); draft.cur = el.value; draft.rate = String((t.rates||{})[draft.cur] ?? ""); renderExpenseSheet(); const r = $("#exp-rate"); if (r && !r.value) r.focus(); }
+});
+function syncTripDraft(){ if (!draft) return; const n = $("#trip-name"), c = $("#trip-cur"); if (n) draft.name = n.value; if (c) draft.currency = c.value; }
+function syncExpDraft(){ if (!draft || draft.kind !== "exp") return;
+  const g = id => $("#" + id);
+  if (g("exp-amount")) draft.amount = g("exp-amount").value; if (g("exp-desc")) draft.desc = g("exp-desc").value;
+  if (g("exp-date")) draft.date = g("exp-date").value; if (g("exp-notes")) draft.notes = g("exp-notes").value; if (g("exp-rate")) draft.rate = g("exp-rate").value;
+  document.querySelectorAll("[data-mi]").forEach(i => draft[i.dataset.mi][i.dataset.pid] = i.value);
+  document.querySelectorAll("[data-item-name]").forEach(i => { const it = draft.items[+i.dataset.itemName]; if (it) it.name = i.value; });
+  document.querySelectorAll("[data-item-amt]").forEach(i => { const it = draft.items[+i.dataset.itemAmt]; if (it) it.amount = i.value; }); }
+function addDraftPerson(){ syncTripDraft(); const inp = $("#person-name"); const name = (inp && inp.value || "").trim(); if (!name) return;
+  draft.people.push(makePerson(name, draft.people.length)); renderTripSheet(); setTimeout(() => { const n = $("#person-name"); n && n.focus(); }, 30); }
+
+document.addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const form = ev.target.dataset.form, t = trip();
+  if (form === "create-trip"){
+    syncTripDraft(); const pend = ($("#person-name") && $("#person-name").value || "").trim(); if (pend) draft.people.push(makePerson(pend, draft.people.length));
+    if (!draft.name.trim() || !draft.people.length) return;
+    const id = newId(), d = draft; lsSet("tk-cur", d.currency);
+    const data = { name:d.name.trim(), emoji:d.emoji, currency:d.currency, people:d.people, methods:d.methods, rates:{}, createdAt:Date.now() };
+    closeSheet();
+    try {
+      await putTrip(id, data);
+      lsSet("tk-me-" + id, d.people[0].id); rememberTrip({id, ...data});
+      sb(id).from("activity").insert({id:newId(), trip_id:id, data:{at:Date.now(), who:d.people[0].id, action:"trip", text:`created the trip with ${d.people.map(p => p.name).join(", ")}`}}).then(() => {}, () => {});
+      toast("Trip created! Bon voyage ✈️"); go(id); confetti();
+    } catch (e){ console.error(e); toast("Couldn't create the trip. Check your connection and the database setup."); }
+    return;
+  }
+  if (form === "save-exp"){
+    syncExpDraft(); const d = draft, err = $("#exp-err"), settle = d.type === "settle";
+    if (settle){ d.cur = t.currency; d.rate = "1"; }
+    const fE = 10 ** decimals(d.cur), fT = 10 ** decimals(t.currency), amtE = Math.round(parseAmt(d.amount) * fE);
+    const foreign = d.cur !== t.currency, rate = foreign ? parseAmt(d.rate) : 1;
+    if (amtE <= 0){ err.textContent = "Enter an amount above zero."; return; }
+    if (foreign && rate <= 0){ err.textContent = `Enter how many ${t.currency} one ${d.cur} is worth.`; return; }
+    if (!d.payer){ err.textContent = "Pick who paid."; return; }
+    if (d.uploading){ err.textContent = "Hang on, the receipt photo is still uploading."; return; }
+    let shares, inputs = {}, amountT;
+    if (settle){
+      const prev = S.expenses.find(e => e.id === d.id), to = Object.keys((prev && prev.shares) || {})[0];
+      amountT = amtE / fT; shares = {[to]: amountT};
+    } else {
+      const r = calcSplit(d, t);
+      if (r.err){ err.textContent = r.err; return; }
+      amountT = r.totalT / fT; shares = {}; for (const [id, v] of Object.entries(r.sharesT)) shares[id] = v / fT;
+      if (d.mode === "equal") inputs.among = [...d.among];
+      if (d.mode === "exact") inputs.exact = d.exact;
+      if (d.mode === "percent") inputs.percent = d.percent;
+      if (d.mode === "shares") inputs.shares = d.shareN;
+      if (d.mode === "items") inputs.items = d.items.filter(i => parseAmt(i.amount) > 0 || i.name.trim());
+    }
+    const prev = S.expenses.find(e => e.id === d.id);
+    const body = { type:d.type, amount:amountT, origAmount:amtE / fE, cur:d.cur, rate, desc:(d.desc||"").trim(), cat:d.cat, payer:d.payer, method:d.method,
+      mode: settle ? "exact" : d.mode, inputs, shares, notes:(d.notes||"").trim(), receipt:d.receipt || null, date:d.date || today(),
+      createdAt:(prev && prev.createdAt) || Date.now(), createdBy:(prev ? prev.createdBy : me()) || null, updatedBy:me() || null, updatedAt:Date.now() };
+    const isNew = !d.id, id = d.id || newId();
+    lsSet("tk-lastcur-" + t.id, foreign ? d.cur : "");
+    closeSheet();
+    const label = settle ? "a pay-back" : (body.desc || cat(body.cat).l);
+    const money = fmt(amountT, t.currency) + (foreign ? ` (${fmt(body.origAmount, body.cur)})` : "");
+    const ok = await write(async () => {
+        await putExpense(id, body);
+        if (foreign && String((t.rates||{})[d.cur]) !== String(rate)) await patchTrip({rates:{[d.cur]: rate}}).catch(() => {});
+      }, isNew ? CHEERS[Math.floor(Math.random()*CHEERS.length)] : "Updated ✏️", [t.id, isNew ? "add" : "edit", `${isNew ? "added" : "edited"} ${label} · ${money}`]);
+    if (ok && isNew){ S.tab = "expenses"; render(); confetti(); }
+    return;
+  }
+  if (form === "add-person"){ const v = $("#new-person").value.trim(); if (!v) return;
+    const people = [...(t.people||[]), makePerson(v, (t.people||[]).length)];
+    await write(() => patchTrip({people}), `${v} joined the trip 👋`, [t.id, "people", `added ${v} to the trip`]); return; }
+  if (form === "add-method"){ const v = $("#new-method").value.trim(); if (!v) return;
+    await write(() => patchTrip({methods:[...(t.methods||[]), v]}), "Method added"); return; }
+  if (form === "rates"){ const rates = {};
+    ev.target.querySelectorAll("[data-rate]").forEach(i => { const r = parseAmt(i.value); if (r > 0) rates[i.dataset.rate] = r; });
+    await write(() => patchTrip({rates}), "Rates saved 💱", [t.id, "trip", "updated exchange rates"]); return; }
+  if (form === "trip-details"){ const name = $("#trip-name-edit").value.trim(), currency = $("#trip-cur-edit").value; if (!name) return;
+    await write(() => patchTrip({name, currency}), "Saved", [t.id, "trip", "updated the trip details"]); return; }
+});
+
+/* ---------- confetti ---------- */
+function confetti(){
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const c = $("#confetti"); c.hidden = false; const x = c.getContext("2d");
+  const W = c.width = innerWidth, H = c.height = innerHeight;
+  const cols = ["#FFC83D","#3A4BF2","#FF8FA3","#4CD39A","#8B96FF","#FFB4A2"];
+  const ps = Array.from({length:90}, () => ({x:W/2, y:H*0.85, vx:(Math.random()-.5)*14, vy:-(Math.random()*14+8), r:Math.random()*6+4, c:cols[Math.random()*cols.length|0], a:Math.random()*6, s:(Math.random()-.5)*.4}));
+  let n = 0;
+  (function tick(){ x.clearRect(0,0,W,H);
+    ps.forEach(p => { p.vy += .45; p.x += p.vx; p.y += p.vy; p.a += p.s; x.save(); x.translate(p.x,p.y); x.rotate(p.a); x.fillStyle = p.c; x.fillRect(-p.r/2,-p.r/4,p.r,p.r/2); x.restore(); });
+    if (++n < 90) requestAnimationFrame(tick); else { x.clearRect(0,0,W,H); c.hidden = true; } })();
+}
+
+readHash(); render();
+</script>
+</body>
+</html>
