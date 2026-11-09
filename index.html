@@ -189,6 +189,33 @@ img{max-width:100%}
 /* iPhone zooms in on any field with text smaller than 16px; keep every field at 16px or more. */
 input:not(.amount-in), select:not(.cur-sel), textarea{font-size:16px}
 .fsel select{padding:8px 4px}
+/* iPhone gives date fields a fixed minimum width that ignores the layout; let them shrink to their column. */
+input[type="date"]{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:100%;min-width:0;min-height:46px;box-sizing:border-box;background:var(--surface)}
+input[type="date"]::-webkit-date-and-time-value{text-align:left;margin:0}
+.xform{display:flex;flex-direction:column;gap:8px}
+.sheet{max-height:96%;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+.sheet .rate-row .input{padding:6px 10px}
+.sheet .grab{margin-bottom:8px}
+.grid2 > .input{padding:10px 12px;width:100%;min-width:0}
+.xs-head{display:flex;align-items:center;gap:10px;margin-bottom:2px}
+.sheet .xs-head h2{font-size:22px;margin:0}
+.sheet .amount-in{font-size:30px;padding:4px 6px}
+.sheet .amount-row{grid-template-columns:minmax(0,1fr) 92px}
+.catrow{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:2px 0}
+.catrow::-webkit-scrollbar{display:none}
+.catrow .chip{flex:none;padding:6px 11px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.mini{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mini .input{padding:10px 12px;width:100%}
+.split-btn{display:flex;align-items:center;gap:6px;text-align:left;font-weight:600;font-size:14px;cursor:pointer;min-height:46px}
+.split-btn .grow{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.split-btn.bad{border-color:var(--bad);color:var(--bad)}
+.thumb.sm{width:48px;height:48px;position:relative;cursor:pointer}
+.thumb-busy{position:absolute;inset:0;display:grid;place-items:center;background:rgba(10,14,30,.45);border-radius:10px}
+.icon-btn.file-btn{width:48px;height:48px;cursor:pointer}
+.sheet-foot{position:sticky;bottom:calc(-12px - env(safe-area-inset-bottom,0px));background:var(--bg);padding:6px 0 4px;margin-top:2px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.lightbox{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.lightbox img{max-height:80%}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -683,46 +710,52 @@ function expenseSheet(e){
       payer: ids.includes(m) ? m : ids[0], method:(t.methods||[])[0]||"", notes:"", date:today(),
       mode:"equal", among:new Set(ids), exact:{}, percent:{}, shareN:{}, items:[], receipt:null, receiptUrl:null, confirmDel:false };
   }
-  renderExpenseSheet(true);
+  draft.view = "main"; renderExpenseSheet();
 }
-function renderExpenseSheet(focus){
+function splitSummary(){
+  const t = trip(), d = draft, r = calcSplit(d, t);
+  if (r.err) return {text:"⚠️ " + r.err, bad:true};
+  const n = Object.keys(r.prevE).length, names = {equal:"Equal", exact:"Exact amounts", percent:"By %", shares:"By shares", items:"Itemized"};
+  return {text:`${names[d.mode]} · ${n} ${n===1?"person":"people"}`, bad:false};
+}
+function renderExpenseSheet(){
   const t = trip(), d = draft;
   if (!t || !d) return;
-  const people = t.people||[], settle = d.type === "settle", foreign = d.cur !== t.currency;
-  const receiptBlock = settle ? "" : (d.receiptUrl ? `
-      <div class="receipt">
-        <button type="button" class="thumb" data-act="view-receipt" aria-label="View receipt"><img src="${esc(d.receiptUrl)}" alt="Receipt photo"></button>
-        <div class="grow stack" style="gap:6px">
-          <span class="note muted">${d.uploading ? `<span class="spin">⏳</span> Uploading photo…` : d.receipt ? "Receipt attached 🧾" : "Photo didn't upload. Remove it and try again."}</span>
-          <div class="row" style="flex-wrap:wrap;gap:6px"><button type="button" class="btn sm ghost" data-act="rm-receipt">Remove</button></div>
-        </div>
-      </div>` : `<label class="btn ghost block file-btn">📷 Attach receipt photo<input type="file" id="receipt-file" accept="image/*"></label>`);
-  openSheet(`<h2>${settle ? "Pay-back 🤝" : d.id ? "Edit expense ✏️" : "New expense 💸"}</h2>
-    <form class="stack" data-form="save-exp">
-      ${receiptBlock}
-      <div class="field"><label class="label" for="exp-amount">Amount</label>
-        <div class="amount-row"><input class="amount-in num" id="exp-amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(d.amount)}">
+  if (d.view === "split") return renderSplitView();
+  const people = t.people||[], settle = d.type === "settle", foreign = d.cur !== t.currency, sum = settle ? null : splitSummary();
+  const methods = [...new Set([...(t.methods||[]), d.method].filter(Boolean))];
+  const receipt = d.receiptUrl
+    ? `<button type="button" class="thumb sm" data-act="view-receipt" aria-label="View receipt photo"><img src="${esc(d.receiptUrl)}" alt="">${d.uploading ? `<span class="thumb-busy"><span class="spin">⏳</span></span>` : ""}</button>`
+    : `<label class="icon-btn file-btn" aria-label="Attach receipt photo" title="Attach receipt photo">📷<input type="file" id="receipt-file" accept="image/*"></label>`;
+  openSheet(`<form class="xform" data-form="save-exp">
+      <div class="xs-head"><h2 class="grow">${settle ? "Pay-back 🤝" : d.id ? "Edit expense ✏️" : "New expense 💸"}</h2><button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button></div>
+      <div class="amount-row"><input class="amount-in num" id="exp-amount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Amount" value="${esc(d.amount)}">
         ${settle ? `<span class="cur-sel" style="display:grid;place-items:center">${esc(t.currency)}</span>` : `<select class="cur-sel" id="exp-cur" aria-label="Currency">${curList(t.currency, d.cur).map(c => `<option ${c===d.cur?"selected":""}>${c}</option>`).join("")}</select>`}</div>
-        ${foreign && !settle ? `<div class="rate-row"><span>1 ${esc(d.cur)} =</span><input class="input num" id="exp-rate" inputmode="decimal" placeholder="rate" value="${esc(d.rate)}"><span>${esc(t.currency)}</span><span class="muted num" id="conv-line">${convLine()}</span></div>` : ""}
+      ${foreign && !settle ? `<div class="rate-row"><span>1 ${esc(d.cur)} =</span><input class="input num" id="exp-rate" inputmode="decimal" placeholder="rate" aria-label="Exchange rate" value="${esc(d.rate)}"><span>${esc(t.currency)}</span><span class="muted num" id="conv-line">${convLine()}</span></div>` : ""}
+      ${settle ? "" : `
+      <div class="row">${receipt}<input class="input grow" id="exp-desc" maxlength="60" placeholder="What was it? e.g. Sunset cocktails" aria-label="Description" value="${esc(d.desc)}"></div>
+      <div class="catrow" role="group" aria-label="Category">${CATS.map(c => `<button type="button" class="chip ${d.cat===c.k?"on":""}" data-act="d-cat" data-v="${c.k}">${c.e} ${c.l}</button>`).join("")}</div>`}
+      <div class="grid2">
+        <select class="input" id="exp-payer" aria-label="Who paid">${people.map(p => `<option value="${esc(p.id)}" ${d.payer===p.id?"selected":""}>${esc(p.emoji)} ${esc(p.name)} paid</option>`).join("")}</select>
+        <select class="input" id="exp-method" aria-label="Paid with">${methods.length ? methods.map(x => `<option ${d.method===x?"selected":""}>${esc(x)}</option>`).join("") : `<option value="">—</option>`}</select>
       </div>
-      ${settle ? "" : `
-      <div class="field"><label class="label" for="exp-desc">What was it?</label><input class="input" id="exp-desc" maxlength="60" placeholder="Sunset cocktails" value="${esc(d.desc)}"></div>
-      <div class="field"><span class="label">Category</span><div class="chips">${CATS.map(c => `<button type="button" class="chip ${d.cat===c.k?"on":""}" data-act="d-cat" data-v="${c.k}">${c.e} ${c.l}</button>`).join("")}</div></div>`}
-      <div class="field"><span class="label">Who paid?</span><div class="chips">${people.map(p => `<button type="button" class="chip ${d.payer===p.id?"on":""}" data-act="d-payer" data-v="${esc(p.id)}">${face(p)}${esc(p.name)}</button>`).join("")}</div></div>
-      <div class="field"><span class="label">Paid with</span><div class="chips">${(t.methods||[]).map(x => `<button type="button" class="chip ${d.method===x?"on":""}" data-act="d-method" data-v="${esc(x)}">${esc(x)}</button>`).join("") || `<span class="muted">Add methods in the Trip tab.</span>`}</div></div>
-      ${settle ? "" : `
-      <div class="field"><span class="label">Split</span>
-        <div class="seg" role="group" aria-label="Split type">${MODES.map(([k,l]) => `<button type="button" class="${d.mode===k?"on":""}" data-act="d-mode" data-v="${k}">${l}</button>`).join("")}</div>
-        <div id="split-box">${splitBox()}</div></div>`}
-      <div class="field"><label class="label" for="exp-date">Date</label><input class="input" type="date" id="exp-date" value="${esc(d.date)}"></div>
-      ${settle ? "" : `<div class="field"><label class="label" for="exp-notes">Notes</label><textarea class="input" id="exp-notes" maxlength="500" placeholder="Table 12, booked by Sam. Tip included.">${esc(d.notes)}</textarea></div>`}
-      ${d.id && d.createdBy ? `<p class="note muted" style="margin:0">Added by ${esc(who(d.createdBy))}${d.createdAt ? " · " + esc(ago(d.createdAt)) : ""}</p>` : ""}
-      <div id="exp-err" class="note neg" role="alert"></div>
-      <button class="btn primary block">${d.id ? "Save changes" : "Add to the kitty"}</button>
-      ${d.id ? `<button type="button" class="btn danger block" data-act="d-del">${d.confirmDel ? "Tap again to delete" : "Delete"}</button>` : ""}
-      <button type="button" class="btn ghost block" data-act="close">Cancel</button>
+      <div class="grid2">
+        <input class="input" type="date" id="exp-date" aria-label="Date" value="${esc(d.date)}">
+        ${settle ? "<span></span>" : `<button type="button" class="input split-btn ${sum.bad?"bad":""}" data-act="open-split" aria-label="Split: ${esc(sum.text)}"><span class="grow">🍕 ${esc(sum.text)}</span><span aria-hidden="true">▸</span></button>`}
+      </div>
+      ${settle ? "" : `<input class="input" id="exp-notes" maxlength="500" placeholder="📝 Note (optional)" aria-label="Note" value="${esc(d.notes)}">`}
+      <div class="sheet-foot">
+        <div id="exp-err" class="note neg" role="alert"></div>
+        <div class="row">${d.id ? `<button type="button" class="btn danger" data-act="d-del">${d.confirmDel ? "Tap again" : "Delete"}</button>` : ""}<button class="btn primary grow">${d.id ? "Save changes" : "Add to the kitty"}</button></div>
+      </div>
     </form>`);
-  if (focus && !d.id) setTimeout(() => { const a = $("#exp-amount"); a && a.focus(); }, 60);
+}
+function renderSplitView(){
+  const d = draft;
+  openSheet(`<div class="xs-head"><button type="button" class="icon-btn" data-act="split-done" aria-label="Back">←</button><h2 class="grow">Split it 🍕</h2></div>
+    <div class="seg" role="group" aria-label="Split type">${MODES.map(([k,l]) => `<button type="button" class="${d.mode===k?"on":""}" data-act="d-mode" data-v="${k}">${l}</button>`).join("")}</div>
+    <div id="split-box" style="margin-top:12px">${splitBox()}</div>
+    <div class="sheet-foot"><button type="button" class="btn primary block" data-act="split-done">Done</button></div>`);
 }
 function convLine(){ const t = trip(), d = draft, r = parseAmt(d.rate), a = parseAmt(d.amount);
   return r > 0 && a > 0 ? "= " + fmt(a * r, t.currency) : r > 0 ? "" : "enter a rate"; }
@@ -864,12 +897,11 @@ document.addEventListener("click", async ev => {
   if (act === "draft-add-person") return addDraftPerson();
   if (act === "draft-rm-person"){ syncTripDraft(); draft.people.splice(+el.dataset.i, 1); return renderTripSheet(); }
   if (draft && draft.kind === "exp"){
-    if (act === "view-receipt"){ $("#lightbox-root").innerHTML = `<div class="lightbox" data-act="lightbox" role="dialog" aria-label="Receipt"><img src="${esc(draft.receiptUrl)}" alt="Receipt photo"></div>`; return; }
-    if (act === "rm-receipt"){ syncExpDraft(); if (draft.receiptUrl && draft.receiptUrl.startsWith("blob:")) URL.revokeObjectURL(draft.receiptUrl);
+    if (act === "view-receipt"){ syncExpDraft(); $("#lightbox-root").innerHTML = `<div class="lightbox" data-act="lightbox" role="dialog" aria-label="Receipt"><img src="${esc(draft.receiptUrl)}" alt="Receipt photo"><button type="button" class="btn danger" style="background:var(--surface)" data-act="rm-receipt">Remove photo</button></div>`; return; }
+    if (act === "open-split" || act === "split-done"){ syncExpDraft(); draft.view = act === "open-split" ? "split" : "main"; renderExpenseSheet(); const sh = $(".sheet"); if (sh) sh.scrollTop = 0; return; }
+    if (act === "rm-receipt"){ $("#lightbox-root").innerHTML = ""; syncExpDraft(); if (draft.receiptUrl && draft.receiptUrl.startsWith("blob:")) URL.revokeObjectURL(draft.receiptUrl);
       draft.receipt = null; draft.receiptUrl = null; return renderExpenseSheet(); }
-    if (act === "d-cat"){ syncExpDraft(); draft.cat = el.dataset.v; return renderExpenseSheet(); }
-    if (act === "d-payer"){ syncExpDraft(); draft.payer = el.dataset.v; return renderExpenseSheet(); }
-    if (act === "d-method"){ syncExpDraft(); draft.method = el.dataset.v; return renderExpenseSheet(); }
+    if (act === "d-cat"){ draft.cat = el.dataset.v; document.querySelectorAll('[data-act="d-cat"]').forEach(b => b.classList.toggle("on", b.dataset.v === draft.cat)); return; }
     if (act === "d-mode"){ syncExpDraft(); draft.mode = el.dataset.v; prefillMode(draft.mode); return renderExpenseSheet(); }
     if (act === "d-among"){ syncExpDraft(); const id = el.dataset.v; draft.among.has(id) ? draft.among.delete(id) : draft.among.add(id); $("#split-box").innerHTML = splitBox(); return; }
     if (act === "d-all"){ draft.among = new Set((t.people||[]).map(p=>p.id)); $("#split-box").innerHTML = splitBox(); return; }
@@ -878,7 +910,7 @@ document.addEventListener("click", async ev => {
     if (act === "item-who"){ syncExpDraft(); const it = draft.items[+el.dataset.i], id = el.dataset.v;
       it.who = it.who.includes(id) ? it.who.filter(x => x !== id) : [...it.who, id]; $("#split-box").innerHTML = splitBox(); return; }
     if (act === "d-del"){
-      if (!draft.confirmDel){ syncExpDraft(); draft.confirmDel = true; el.textContent = "Tap again to delete"; setTimeout(() => { if (draft) draft.confirmDel = false; if (el.isConnected) el.textContent = "Delete"; }, 3000); return; }
+      if (!draft.confirmDel){ syncExpDraft(); draft.confirmDel = true; el.textContent = "Tap again"; setTimeout(() => { if (draft) draft.confirmDel = false; if (el.isConnected) el.textContent = "Delete"; }, 3000); return; }
       const id = draft.id, prev = S.expenses.find(e => e.id === id); closeSheet();
       await write(() => delExpense(id), "Deleted 🗑️",
         [t.id, "delete", `deleted ${prev && prev.type === "settle" ? "a pay-back" : (prev && prev.desc) || "an expense"}${prev ? " · " + fmt(prev.amount, t.currency) : ""}`]);
@@ -928,6 +960,7 @@ function syncExpDraft(){ if (!draft || draft.kind !== "exp") return;
   const g = id => $("#" + id);
   if (g("exp-amount")) draft.amount = g("exp-amount").value; if (g("exp-desc")) draft.desc = g("exp-desc").value;
   if (g("exp-date")) draft.date = g("exp-date").value; if (g("exp-notes")) draft.notes = g("exp-notes").value; if (g("exp-rate")) draft.rate = g("exp-rate").value;
+  if (g("exp-payer")) draft.payer = g("exp-payer").value; if (g("exp-method")) draft.method = g("exp-method").value;
   document.querySelectorAll("[data-mi]").forEach(i => draft[i.dataset.mi][i.dataset.pid] = i.value);
   document.querySelectorAll("[data-item-name]").forEach(i => { const it = draft.items[+i.dataset.itemName]; if (it) it.name = i.value; });
   document.querySelectorAll("[data-item-amt]").forEach(i => { const it = draft.items[+i.dataset.itemAmt]; if (it) it.amount = i.value; }); }
@@ -966,7 +999,7 @@ document.addEventListener("submit", async ev => {
       amountT = amtE / fT; shares = {[to]: amountT};
     } else {
       const r = calcSplit(d, t);
-      if (r.err){ err.textContent = r.err; return; }
+      if (r.err){ d.view = "split"; renderExpenseSheet(); const sh = $(".sheet"); if (sh) sh.scrollTop = 0; return; }
       amountT = r.totalT / fT; shares = {}; for (const [id, v] of Object.entries(r.sharesT)) shares[id] = v / fT;
       if (d.mode === "equal") inputs.among = [...d.among];
       if (d.mode === "exact") inputs.exact = d.exact;
