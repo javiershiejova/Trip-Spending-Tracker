@@ -3,12 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Trip Kitty</title>
+<title>Wander Wallet</title>
 <meta name="description" content="Shared trip expenses: split bills, track who paid, settle up.">
-<meta name="theme-color" content="#3A4BF2">
+<meta name="theme-color" content="#0B1020">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Trip Kitty">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-title" content="Wander Wallet">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
@@ -16,21 +20,13 @@
 <style>
 /* Layout: one phone-width column of boarding-pass cards; entry happens in a bottom sheet; a fixed "add" button sits over the thumb. */
 :root{
-  --bg:#EDF1FA; --surface:#FFFFFF; --ink:#17203B; --muted:#5A6482; --line:#D7DDEC; --chip:#E2E7F5;
-  --accent:#3A4BF2; --accent-ink:#FFFFFF; --sun:#FFC83D; --sun-ink:#3A2A00;
-  --good:#11895A; --bad:#D23D4B; --shadow:0 1px 0 rgba(23,32,59,.06),0 8px 24px -12px rgba(23,32,59,.25);
+  --bg:#0B1020; --surface:#161C31; --ink:#EEF1FA; --muted:#97A0BE; --line:#283050; --chip:#212944;
+  --accent:#3F4FF0; --accent-ink:#FFFFFF; --sun:#FFC83D; --sun-ink:#2A1E00;
+  --good:#3FCB8F; --bad:#FF6F7D; --shadow:0 1px 0 rgba(0,0,0,.35),0 10px 28px -14px rgba(0,0,0,.8);
   --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
   --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --r:18px;
+  --r:18px; color-scheme:dark;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0E1222; --surface:#191F35; --ink:#EDF0FA; --muted:#98A1BF; --line:#2A3250; --chip:#252D48;
-  --accent:#8B96FF; --accent-ink:#0E1222; --sun:#FFD25E; --sun-ink:#2A1E00;
-  --good:#4CD39A; --bad:#FF7C87; --shadow:0 1px 0 rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.7); color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0E1222; --surface:#191F35; --ink:#EDF0FA; --muted:#98A1BF; --line:#2A3250; --chip:#252D48;
-  --accent:#8B96FF; --accent-ink:#0E1222; --sun:#FFD25E; --sun-ink:#2A1E00;
-  --good:#4CD39A; --bad:#FF7C87; --shadow:0 1px 0 rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.7); color-scheme:dark}
 
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-tap-highlight-color:transparent}
@@ -48,7 +44,7 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.
 
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 .logo{width:48px;height:48px;border-radius:14px;background:var(--sun);color:var(--sun-ink);display:grid;place-items:center;font-size:26px;transform:rotate(-6deg);box-shadow:var(--shadow)}
-.brand h1{font-size:34px;font-weight:800;line-height:1}
+.brand h1{font-size:30px;font-weight:800;line-height:1}
 .tag{font-size:15px;margin:4px 0 22px}
 
 .btn{border:0;border-radius:999px;padding:12px 18px;font-weight:700;background:var(--chip);display:inline-flex;align-items:center;gap:8px;justify-content:center;transition:transform .12s}
@@ -216,6 +212,15 @@ input[type="date"]::-webkit-date-and-time-value{text-align:left;margin:0}
 .sheet-foot{position:sticky;bottom:calc(-12px - env(safe-area-inset-bottom,0px));background:var(--bg);padding:6px 0 4px;margin-top:2px;display:flex;flex-direction:column;gap:6px;z-index:2}
 .lightbox{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
 .lightbox img{max-height:80%}
+.logo{background:transparent!important;box-shadow:none!important}
+.logo img{width:100%;height:100%;display:block;filter:drop-shadow(0 6px 10px rgba(23,32,59,.25))}
+.face-btn{border:0;background:none;padding:0;display:inline-grid;cursor:pointer;position:relative;color:inherit}
+.face-btn .pen{position:absolute;right:-6px;bottom:-4px;font-size:11px;background:var(--surface);border-radius:50%;width:18px;height:18px;display:grid;place-items:center}
+.chip.on .face-btn .face{box-shadow:0 0 0 2px var(--accent-ink)}
+.face.xl{width:64px;height:64px;font-size:36px;border:0}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{width:36px;height:36px;border-radius:50%;border:3px solid transparent;padding:0;cursor:pointer}
+.sw.on{border-color:var(--ink);transform:scale(1.1)}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -234,11 +239,12 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const CATS = [{k:"food",e:"🍜",l:"Food"},{k:"drinks",e:"🍹",l:"Drinks"},{k:"transport",e:"🚕",l:"Transport"},{k:"stay",e:"🏨",l:"Stay"},{k:"fun",e:"🎢",l:"Fun"},{k:"shopping",e:"🛍️",l:"Shopping"},{k:"groceries",e:"🛒",l:"Groceries"},{k:"other",e:"✨",l:"Other"}];
 const TRIP_EMOJI = ["🏝️","🏔️","🗼","🏕️","🚗","✈️","🌋","🍣","🎡","🏛️","🌸","🐘"];
 const PERSON_EMOJI = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁","🐵","🐰","🐢"];
+const AVATARS = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁","🐵","🐰","🐢","🐶","🐱","🐻","🐷","🐮","🦉","🐳","🦋","🐝","🦖","😎","🥳","🤠","🧑‍🚀","🏄","🧳"];
 const COLORS = ["#FFB4A2","#A8E6CF","#FFD3B6","#B5C7FF","#F8C8F0","#FFE29A","#9FE2F2","#D4C1FF"];
 const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer"];
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"]];
-const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Into the kitty! 🐱","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
+const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -268,22 +274,24 @@ function niceDate(s){ if(!s) return ""; const d = new Date(s+"T12:00:00"); if (i
   return d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"}); }
 function ago(ts){ const s = (Date.now()-ts)/1000; if (s < 60) return "just now"; if (s < 3600) return Math.floor(s/60)+"m ago"; if (s < 86400) return Math.floor(s/3600)+"h ago";
   return new Date(ts).toLocaleDateString(undefined,{day:"numeric",month:"short"})+" "+new Date(ts).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); }
-function me(){ return S.tripId ? lsGet("tk-me-" + S.tripId) || "" : ""; }
+function me(){ return S.tripId ? lsGet("ww-me-" + S.tripId) || "" : ""; }
 function who(pid){ return pid ? (pid === me() ? "You" : person(S.trip || {}, pid).name) : "Someone"; }
 function toast(msg){ const el = document.createElement("div"); el.className = "toast"; el.textContent = msg; document.body.appendChild(el); setTimeout(() => el.remove(), 2400); }
 function tripLink(id){ return location.origin + location.pathname + "#t-" + id; }
 
 /* ---------- my trips (remembered on this device) ---------- */
-function myTrips(){ try { return JSON.parse(lsGet("tk-trips") || "[]"); } catch { return []; } }
-function rememberTrip(t){ const list = myTrips().filter(x => x.id !== t.id); list.unshift({id:t.id, name:t.name, emoji:t.emoji, currency:t.currency, people:(t.people||[]).length, seen:Date.now()}); lsSet("tk-trips", JSON.stringify(list.slice(0, 50))); }
-function forgetTrip(id){ lsSet("tk-trips", JSON.stringify(myTrips().filter(x => x.id !== id))); }
+(function migrateOldKeys(){ try { const keys = []; for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+  for (const k of keys) if (k && k.startsWith("tk-")){ const nk = "ww-" + k.slice(3); if (localStorage.getItem(nk) == null) localStorage.setItem(nk, localStorage.getItem(k)); localStorage.removeItem(k); } } catch {} })();
+function myTrips(){ try { return JSON.parse(lsGet("ww-trips") || "[]"); } catch { return []; } }
+function rememberTrip(t){ const list = myTrips().filter(x => x.id !== t.id); list.unshift({id:t.id, name:t.name, emoji:t.emoji, currency:t.currency, people:(t.people||[]).length, seen:Date.now()}); lsSet("ww-trips", JSON.stringify(list.slice(0, 50))); }
+function forgetTrip(id){ lsSet("ww-trips", JSON.stringify(myTrips().filter(x => x.id !== id))); }
 
 /* ---------- Supabase ---------- */
 // Every request carries the trip id in a header; database rules only allow rows for that trip,
 // so nobody can list or read trips without the link.
 const clients = {};
 function sb(tid){ return clients[tid] ||= window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:"tk-"+tid}, global:{headers:{"x-trip-id":tid}} }); }
+  auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:"ww-"+tid}, global:{headers:{"x-trip-id":tid}} }); }
 let channel = null, pollTimer = null;
 function check(r){ if (r.error) throw r.error; return r.data; }
 async function loadTrip(quiet){
@@ -439,7 +447,7 @@ function render(){
   if (fid){ const n = document.getElementById(fid); if (n){ n.focus({preventScroll:true}); if (sel) try { n.setSelectionRange(sel[0], sel[1]); } catch {} } }
 }
 function setupView(){
-  return `<div class="brand"><div class="logo" aria-hidden="true">🐱</div><h1>Trip Kitty</h1></div>
+  return `<div class="brand"><div class="logo" aria-hidden="true"><img src="icon.svg" alt=""></div><h1>Wander Wallet</h1></div>
     <div class="card setup stack"><b>Almost there: connect the database</b>
       <p style="margin:0">${window.supabase ? "Open <code>index.html</code> and paste your Supabase project URL and anon key into the two lines near the top marked <code>PASTE</code>." : "The database library didn't load. Check your internet connection and reload."}</p>
       <p class="muted" style="margin:0;font-size:14px">Full steps are in README.md.</p></div>`;
@@ -454,7 +462,7 @@ function homeView(){
     </button>`).join("")
     : `<div class="empty"><span class="big">🗺️</span><b>No trips on this phone yet</b><p class="muted">Start a trip, or open the link a friend sent you. Trips you open are remembered here.</p></div>`;
   return `
-    <div class="brand"><div class="logo" aria-hidden="true">🐱</div><h1>Trip Kitty</h1></div>
+    <div class="brand"><div class="logo" aria-hidden="true"><img src="icon.svg" alt=""></div><h1>Wander Wallet</h1></div>
     <p class="tag muted">The shared money pot for your adventures. Log it, split it, forget the awkward maths. No sign-up needed.</p>
     <div class="stack">${cards}</div>
     <button class="btn primary fab" data-act="new-trip">＋ New trip</button>`;
@@ -516,7 +524,7 @@ function filtered(t, exps){
 }
 function expensesTab(t, exps, m){
   if (!S.loaded) return `<div class="empty"><span class="big">🧾</span><b>Fetching receipts…</b></div>`;
-  if (!exps.length) return `<div class="empty"><span class="big">🍦</span><b>Nothing spent yet</b><p class="muted">Bought the first round? Tap “Add expense” and the kitty starts counting.</p></div>`;
+  if (!exps.length) return `<div class="empty"><span class="big">🍦</span><b>Nothing spent yet</b><p class="muted">Bought the first round? Tap “Add expense” and the tracker starts counting.</p></div>`;
   const methods = [...new Set([...(t.methods||[]), ...exps.map(e => e.method).filter(Boolean)])];
   return `<div class="filters">
       <input class="input" id="q" type="search" placeholder="🔍 Search expenses, notes, items…" value="${esc(S.q)}" autocomplete="off">
@@ -630,7 +638,7 @@ function settingsTab(t, exps){
   const rates = Object.entries(t.rates||{}).filter(([c]) => c !== t.currency);
   return `<div class="stack">
     <div class="card"><div class="label" style="margin-bottom:6px">Travellers</div>
-      ${(t.people||[]).map(p => `<div class="person-edit">${face(p)}<b class="grow">${esc(p.name)}</b>${used.has(p.id) ? `<span class="muted" style="font-size:13px">has expenses</span>` : `<button class="btn sm ghost" data-act="rm-person" data-id="${esc(p.id)}">Remove</button>`}</div>`).join("")}
+      ${(t.people||[]).map(p => `<div class="person-edit"><button class="face-btn" data-act="edit-avatar" data-id="${esc(p.id)}" aria-label="Change avatar for ${esc(p.name)}">${face(p)}<span class="pen" aria-hidden="true">✏️</span></button><b class="grow">${esc(p.name)}</b>${used.has(p.id) ? `<span class="muted" style="font-size:13px">has expenses</span>` : `<button class="btn sm ghost" data-act="rm-person" data-id="${esc(p.id)}">Remove</button>`}</div>`).join("")}
       <form class="row" style="margin-top:10px" data-form="add-person"><input class="input grow" id="new-person" placeholder="Add a traveller" maxlength="24"><button class="btn primary">Add</button></form>
     </div>
     <div class="card"><div class="label" style="margin-bottom:8px">Payment methods</div>
@@ -671,7 +679,7 @@ function whoAmISheet(){
     <button class="btn ghost block" data-act="close" style="margin-top:16px">I'm just looking</button>`);
 }
 function newTripSheet(){
-  draft = { kind:"trip", name:"", emoji:TRIP_EMOJI[0], currency: lsGet("tk-cur") || "USD", people:[], methods:[...DEFAULT_METHODS] };
+  draft = { kind:"trip", name:"", emoji:TRIP_EMOJI[0], currency: lsGet("ww-cur") || "USD", people:[], methods:[...DEFAULT_METHODS] };
   renderTripSheet();
 }
 function renderTripSheet(){
@@ -682,12 +690,31 @@ function renderTripSheet(){
       <div class="field"><span class="label">Pick a vibe</span><div class="emoji-pick">${TRIP_EMOJI.map(e => `<button type="button" class="${d.emoji===e?"on":""}" data-act="trip-emoji" data-e="${e}">${e}</button>`).join("")}</div></div>
       <div class="field"><label class="label" for="trip-cur">Home currency (balances are shown in this)</label><select class="input" id="trip-cur">${curList(d.currency).map(c => `<option ${c===d.currency?"selected":""}>${c}</option>`).join("")}</select></div>
       <div class="field"><span class="label">Who's coming? (you first)</span>
-        <div class="chips">${d.people.map((p,i) => `<span class="chip">${face(p)}${esc(p.name)} <button type="button" data-act="draft-rm-person" data-i="${i}" aria-label="Remove ${esc(p.name)}" style="border:0;background:none;padding:0;font-weight:800">×</button></span>`).join("") || `<span class="muted" style="font-size:14px">Add yourself first, then your crew.</span>`}</div>
+        <div class="chips">${d.people.map((p,i) => `<span class="chip ${d.pick===i?"on":""}"><button type="button" class="face-btn" data-act="draft-avatar" data-i="${i}" aria-label="Choose avatar for ${esc(p.name)}">${face(p)}</button>${esc(p.name)} <button type="button" data-act="draft-rm-person" data-i="${i}" aria-label="Remove ${esc(p.name)}" style="border:0;background:none;padding:0;font-weight:800">×</button></span>`).join("") || `<span class="muted" style="font-size:14px">Add yourself first, then your crew.</span>`}</div>
         <div class="row"><input class="input grow" id="person-name" maxlength="24" placeholder="Name"><button type="button" class="btn" data-act="draft-add-person">Add</button></div>
+        ${d.people.length && d.pick == null ? `<span class="note muted">Tap a face to choose that person's avatar.</span>` : ""}
+        ${d.pick != null && d.people[d.pick] ? `<div class="card stack" style="gap:10px">${avatarPicker(d.people[d.pick])}<button type="button" class="btn sm primary" data-act="av-done">Done</button></div>` : ""}
       </div>
-      <button class="btn primary block" ${d.people.length?"":"disabled"}>Start the kitty 🐱</button>
+      <button class="btn primary block" ${d.people.length?"":"disabled"}>Start the trip ✈️</button>
       <button type="button" class="btn ghost block" data-act="close">Cancel</button>
     </form>`);
+}
+function avatarPicker(p){
+  return `<div class="row"><span class="face xl" style="background:${esc(p.color)}" aria-hidden="true">${esc(p.emoji)}</span><b>${esc(p.name)}</b></div>
+    <span class="label">Avatar</span>
+    <div class="emoji-pick">${AVATARS.map(e => `<button type="button" class="${p.emoji===e?"on":""}" data-act="av-emoji" data-e="${e}" aria-label="Avatar ${e}">${e}</button>`).join("")}</div>
+    <span class="label">Colour</span>
+    <div class="swatches">${COLORS.map(c => `<button type="button" class="sw ${p.color===c?"on":""}" style="background:${c}" data-act="av-color" data-c="${c}" aria-label="Colour ${c}"></button>`).join("")}</div>`;
+}
+function avatarSheet(pid){
+  const p = person(trip(), pid);
+  draft = {kind:"avatar", pid, name:p.name, emoji:p.emoji, color:p.color};
+  renderAvatarSheet();
+}
+function renderAvatarSheet(){
+  openSheet(`<div class="xs-head"><h2 class="grow">Pick a look ✨</h2><button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button></div>
+    <div class="stack" style="gap:10px">${avatarPicker(draft)}
+    <button type="button" class="btn primary block" data-act="av-save">Save</button></div>`);
 }
 function makePerson(name, idx){ return { id:newId(8), name, emoji:PERSON_EMOJI[idx % PERSON_EMOJI.length], color:COLORS[idx % COLORS.length] }; }
 
@@ -704,7 +731,7 @@ function expenseSheet(e){
       receipt:e.receipt||null, receiptUrl:receiptUrl(e.receipt), createdBy:e.createdBy, createdAt:e.createdAt, confirmDel:false };
     if (e.mode === "exact" && !inp.exact) for (const [id,v] of Object.entries(e.shares||{})) draft.exact[id] = String(v);
   } else {
-    const lastCur = lsGet("tk-lastcur-" + t.id);
+    const lastCur = lsGet("ww-lastcur-" + t.id);
     const cur = lastCur && validCur(lastCur) ? lastCur : t.currency;
     draft = { kind:"exp", id:null, type:"exp", amount:"", cur, rate:String((t.rates||{})[cur] ?? ""), desc:"", cat:"food",
       payer: ids.includes(m) ? m : ids[0], method:(t.methods||[])[0]||"", notes:"", date:today(),
@@ -746,7 +773,7 @@ function renderExpenseSheet(){
       ${settle ? "" : `<input class="input" id="exp-notes" maxlength="500" placeholder="📝 Note (optional)" aria-label="Note" value="${esc(d.notes)}">`}
       <div class="sheet-foot">
         <div id="exp-err" class="note neg" role="alert"></div>
-        <div class="row">${d.id ? `<button type="button" class="btn danger" data-act="d-del">${d.confirmDel ? "Tap again" : "Delete"}</button>` : ""}<button class="btn primary grow">${d.id ? "Save changes" : "Add to the kitty"}</button></div>
+        <div class="row">${d.id ? `<button type="button" class="btn danger" data-act="d-del">${d.confirmDel ? "Tap again" : "Delete"}</button>` : ""}<button class="btn primary grow">${d.id ? "Save changes" : "Add expense"}</button></div>
       </div>
     </form>`);
 }
@@ -842,7 +869,7 @@ function shareSheet(){
       <p style="margin:0">Anyone with this link can see and edit <b>${esc(t.name)}</b>. No account needed. Only send it to your travel buddies.</p>
       <div class="linkbox" id="share-link">${esc(link)}</div>
       ${navigator.share ? `<button class="btn primary block" data-act="native-share">Send via…</button><button class="btn ghost block" data-act="copy-link">Copy link</button>` : `<button class="btn primary block" data-act="copy-link">Copy link</button>`}
-      <p class="muted" style="margin:0;font-size:13px">Tip: on your phone, open the link and choose “Add to Home Screen” to use Trip Kitty like an app.</p>
+      <p class="muted" style="margin:0;font-size:13px">Tip: on your phone, open the link and choose “Add to Home Screen” to use Wander Wallet like an app.</p>
       <button class="btn ghost block" data-act="close">Done</button>
     </div>`);
 }
@@ -885,17 +912,29 @@ document.addEventListener("click", async ev => {
   if (act === "add") return expenseSheet(null);
   if (act === "share") return shareSheet();
   if (act === "export") return exportCSV();
-  if (act === "native-share"){ try { await navigator.share({title:"Trip Kitty: " + t.name, text:`Join our trip kitty for ${t.name} 🐱`, url:tripLink(t.id)}); } catch {} return; }
+  if (act === "native-share"){ try { await navigator.share({title:"Wander Wallet: " + t.name, text:`Join our Wander Wallet for ${t.name} ✈️ Add what you spend, we do the maths.`, url:tripLink(t.id)}); } catch {} return; }
   if (act === "clear-filters"){ S.q = S.fCat = S.fWho = S.fMethod = ""; return render(); }
   if (act === "bar"){ const cap = $("#chart-cap"); if (cap) cap.textContent = el.dataset.label;
     document.querySelectorAll(".chart .b").forEach(b => b.classList.toggle("sel", b.dataset.bi === el.dataset.i)); return; }
-  if (act === "me"){ const k = "tk-me-" + t.id; lsSet(k, lsGet(k) === el.dataset.id ? "" : el.dataset.id); return render(); }
-  if (act === "pick-me"){ lsSet("tk-me-" + t.id, el.dataset.id); closeSheet(); toast(`Hi ${person(t, el.dataset.id).name}! 👋`); return render(); }
+  if (act === "me"){ const k = "ww-me-" + t.id; lsSet(k, lsGet(k) === el.dataset.id ? "" : el.dataset.id); return render(); }
+  if (act === "pick-me"){ lsSet("ww-me-" + t.id, el.dataset.id); closeSheet(); toast(`Hi ${person(t, el.dataset.id).name}! 👋`); return render(); }
   if (act === "edit"){ const e = S.expenses.find(x => x.id === el.dataset.id); if (e) expenseSheet(e); return; }
   if (act === "copy-link") return copyText($("#share-link").textContent, $("#share-link"));
   if (act === "trip-emoji"){ syncTripDraft(); draft.emoji = el.dataset.e; return renderTripSheet(); }
   if (act === "draft-add-person") return addDraftPerson();
-  if (act === "draft-rm-person"){ syncTripDraft(); draft.people.splice(+el.dataset.i, 1); return renderTripSheet(); }
+  if (act === "draft-avatar"){ syncTripDraft(); draft.pick = draft.pick === +el.dataset.i ? null : +el.dataset.i; return renderTripSheet(); }
+  if (act === "av-done"){ syncTripDraft(); draft.pick = null; return renderTripSheet(); }
+  if (act === "edit-avatar") return avatarSheet(el.dataset.id);
+  if ((act === "av-emoji" || act === "av-color") && draft){
+    const key = act === "av-emoji" ? "emoji" : "color", val = act === "av-emoji" ? el.dataset.e : el.dataset.c;
+    if (draft.kind === "trip" && draft.people[draft.pick]){ syncTripDraft(); draft.people[draft.pick][key] = val; return renderTripSheet(); }
+    if (draft.kind === "avatar"){ draft[key] = val; return renderAvatarSheet(); }
+  }
+  if (act === "av-save" && draft && draft.kind === "avatar"){
+    const d = draft, people = (t.people||[]).map(p => p.id === d.pid ? {...p, emoji:d.emoji, color:d.color} : p);
+    closeSheet(); await write(() => patchTrip({people}), "Looking good! ✨", [t.id, "people", `gave ${d.name} a new look ${d.emoji}`]); return;
+  }
+  if (act === "draft-rm-person"){ syncTripDraft(); draft.people.splice(+el.dataset.i, 1); draft.pick = null; return renderTripSheet(); }
   if (draft && draft.kind === "exp"){
     if (act === "view-receipt"){ syncExpDraft(); $("#lightbox-root").innerHTML = `<div class="lightbox" data-act="lightbox" role="dialog" aria-label="Receipt"><img src="${esc(draft.receiptUrl)}" alt="Receipt photo"><button type="button" class="btn danger" style="background:var(--surface)" data-act="rm-receipt">Remove photo</button></div>`; return; }
     if (act === "open-split" || act === "split-done"){ syncExpDraft(); draft.view = act === "open-split" ? "split" : "main"; renderExpenseSheet(); const sh = $(".sheet"); if (sh) sh.scrollTop = 0; return; }
@@ -973,12 +1012,12 @@ document.addEventListener("submit", async ev => {
   if (form === "create-trip"){
     syncTripDraft(); const pend = ($("#person-name") && $("#person-name").value || "").trim(); if (pend) draft.people.push(makePerson(pend, draft.people.length));
     if (!draft.name.trim() || !draft.people.length) return;
-    const id = newId(), d = draft; lsSet("tk-cur", d.currency);
+    const id = newId(), d = draft; lsSet("ww-cur", d.currency);
     const data = { name:d.name.trim(), emoji:d.emoji, currency:d.currency, people:d.people, methods:d.methods, rates:{}, createdAt:Date.now() };
     closeSheet();
     try {
       await putTrip(id, data);
-      lsSet("tk-me-" + id, d.people[0].id); rememberTrip({id, ...data});
+      lsSet("ww-me-" + id, d.people[0].id); rememberTrip({id, ...data});
       sb(id).from("activity").insert({id:newId(), trip_id:id, data:{at:Date.now(), who:d.people[0].id, action:"trip", text:`created the trip with ${d.people.map(p => p.name).join(", ")}`}}).then(() => {}, () => {});
       toast("Trip created! Bon voyage ✈️"); go(id); confetti();
     } catch (e){ console.error(e); toast("Couldn't create the trip. Check your connection and the database setup."); }
@@ -1012,7 +1051,7 @@ document.addEventListener("submit", async ev => {
       mode: settle ? "exact" : d.mode, inputs, shares, notes:(d.notes||"").trim(), receipt:d.receipt || null, date:d.date || today(),
       createdAt:(prev && prev.createdAt) || Date.now(), createdBy:(prev ? prev.createdBy : me()) || null, updatedBy:me() || null, updatedAt:Date.now() };
     const isNew = !d.id, id = d.id || newId();
-    lsSet("tk-lastcur-" + t.id, foreign ? d.cur : "");
+    lsSet("ww-lastcur-" + t.id, foreign ? d.cur : "");
     closeSheet();
     const label = settle ? "a pay-back" : (body.desc || cat(body.cat).l);
     const money = fmt(amountT, t.currency) + (foreign ? ` (${fmt(body.origAmount, body.cur)})` : "");
