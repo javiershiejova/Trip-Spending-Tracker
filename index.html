@@ -238,6 +238,8 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .qbtn b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cat.sm{width:36px;height:36px;border-radius:10px;background:var(--chip);display:grid;place-items:center;font-size:18px;flex:none}
 .xs-head .icon-btn{flex:none}
+.linkish{border:0;background:none;padding:0;color:var(--accent);font-weight:700;text-decoration:underline;cursor:pointer;font-size:inherit}
+:root:not([data-theme="light"]) .linkish{color:#9AA5FF}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -262,6 +264,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
+const APP_VERSION = "2026.11.09-b";
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -574,6 +577,7 @@ function homeView(){
         <button class="btn primary">Open trip</button>
         <div class="note neg" id="join-err" role="alert"></div>
       </form>
+      <p class="note muted" style="text-align:center;margin:4px 0 0">Version ${APP_VERSION} · <button class="linkish" data-act="force-update">Check for updates</button></p>
     </div>
     <button class="btn primary fab" data-act="new-trip">＋ New trip</button>`;
 }
@@ -1112,6 +1116,11 @@ document.addEventListener("click", async ev => {
   if (act === "theme" || act === "theme-set"){ const th = act === "theme-set" ? el.dataset.v : (document.documentElement.dataset.theme === "light" ? "dark" : "light"); lsSet("ww-theme", th); applyTheme(th); return render(); }
   if (act === "archive"){ const on = el.dataset.v === "1"; setArchived(t.id, on); toast(on ? "Archived 📦 Find it under Archived trips." : "Back in your trips 📤"); if (on) return go(null); return render(); }
   if (act === "summary") return shareSummary();
+  if (act === "force-update"){
+    toast("Getting the latest version…");
+    try { const regs = navigator.serviceWorker ? await navigator.serviceWorker.getRegistrations() : []; for (const r of regs) await r.update().catch(() => {});
+      if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch {}
+    location.replace(location.pathname + "?v=" + Date.now() + location.hash); return; }
   if (act === "summary-share" && draft && draft.kind === "summary"){ try { await navigator.share({files:[draft.file], title:"Trip summary"}); } catch {} return; }
   if (act === "paste-link"){ try { const txt = await navigator.clipboard.readText(); const i = $("#join-link"); if (i) i.value = txt.trim(); } catch { toast("Tap and hold the box, then choose Paste."); } return; }
   if (act === "add") return expenseSheet(null);
