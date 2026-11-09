@@ -460,11 +460,20 @@ function homeView(){
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
     </button>`).join("")
-    : `<div class="empty"><span class="big">🗺️</span><b>No trips on this phone yet</b><p class="muted">Start a trip, or open the link a friend sent you. Trips you open are remembered here.</p></div>`;
+    : `<div class="empty"><span class="big">🗺️</span><b>No trips here yet</b><p class="muted">Start a trip, or paste a trip link below. Trips you open are remembered here.</p></div>`;
   return `
     <div class="brand"><div class="logo" aria-hidden="true"><img src="icon.svg" alt=""></div><h1>Wander Wallet</h1></div>
     <p class="tag muted">The shared money pot for your adventures. Log it, split it, forget the awkward maths. No sign-up needed.</p>
-    <div class="stack">${cards}</div>
+    <div class="stack">${cards}
+      <form class="card stack" style="gap:8px" data-form="join">
+        <label class="label" for="join-link">Open a trip link</label>
+        <p class="muted" style="margin:0;font-size:13px">Added this app to your Home Screen? It keeps its own list, so paste a trip link once to bring the trip in.</p>
+        <div class="row"><input class="input grow" id="join-link" placeholder="Paste trip link" autocomplete="off" autocapitalize="off" spellcheck="false">
+          ${navigator.clipboard && navigator.clipboard.readText ? `<button type="button" class="btn" data-act="paste-link">Paste</button>` : ""}</div>
+        <button class="btn primary">Open trip</button>
+        <div class="note neg" id="join-err" role="alert"></div>
+      </form>
+    </div>
     <button class="btn primary fab" data-act="new-trip">＋ New trip</button>`;
 }
 function tripView(){
@@ -909,6 +918,7 @@ document.addEventListener("click", async ev => {
   if (act === "forget"){ forgetTrip(S.tripId); return go(null); }
   if (act === "tab"){ S.tab = el.dataset.tab; return render(); }
   if (act === "new-trip") return newTripSheet();
+  if (act === "paste-link"){ try { const txt = await navigator.clipboard.readText(); const i = $("#join-link"); if (i) i.value = txt.trim(); } catch { toast("Tap and hold the box, then choose Paste."); } return; }
   if (act === "add") return expenseSheet(null);
   if (act === "share") return shareSheet();
   if (act === "export") return exportCSV();
@@ -1009,6 +1019,11 @@ function addDraftPerson(){ syncTripDraft(); const inp = $("#person-name"); const
 document.addEventListener("submit", async ev => {
   ev.preventDefault();
   const form = ev.target.dataset.form, t = trip();
+  if (form === "join"){
+    const v = ($("#join-link").value || "").trim(), m = v.match(/#t-([a-z0-9]{16,})/i) || v.match(/^([a-z0-9]{16,})$/i);
+    if (!m){ $("#join-err").textContent = "That doesn't look like a trip link. Open the trip in your browser, tap 🔗 Share, then Copy link."; return; }
+    return go(m[1].toLowerCase());
+  }
   if (form === "create-trip"){
     syncTripDraft(); const pend = ($("#person-name") && $("#person-name").value || "").trim(); if (pend) draft.people.push(makePerson(pend, draft.people.length));
     if (!draft.name.trim() || !draft.people.length) return;
