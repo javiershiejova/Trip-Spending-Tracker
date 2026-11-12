@@ -279,6 +279,10 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .place-row{display:grid;grid-template-columns:48px minmax(0,1fr) minmax(0,1.3fr);gap:8px}
 .place-row .icon-btn{width:48px;height:48px}
 .toast.row{display:flex;align-items:center;padding:8px 8px 8px 16px}
+.trip-pick{max-height:200px;overflow-y:auto;padding:2px}
+.look-preview{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:26px;flex:none;box-shadow:var(--shadow)}
+.look-card{display:flex;align-items:center;gap:12px;border:0;width:100%;color:inherit;cursor:pointer;text-align:left}
+.look-hero{min-height:120px}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -295,15 +299,25 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 /* ======================================================================= */
 
 const CATS = [{k:"food",e:"🍜",l:"Food"},{k:"drinks",e:"🍹",l:"Drinks"},{k:"transport",e:"🚕",l:"Transport"},{k:"stay",e:"🏨",l:"Stay"},{k:"fun",e:"🎢",l:"Fun"},{k:"shopping",e:"🛍️",l:"Shopping"},{k:"groceries",e:"🛒",l:"Groceries"},{k:"other",e:"✨",l:"Other"}];
-const TRIP_EMOJI = ["🏝️","🏔️","🗼","🏕️","🚗","✈️","🌋","🍣","🎡","🏛️","🌸","🐘"];
+const TRIP_EMOJI = ["🏝️","🏖️","🏔️","⛰️","🗻","🏕️","🌋","🏜️","🌴","🌸","🍁","❄️","☃️","🌅","🌃","🌉",
+  "🗼","🗽","🏰","🏯","⛩️","🕌","🛕","🏛️","🎡","🎢","🎪","🎭",
+  "✈️","🚗","🚐","🚂","🚢","⛵","🚲","🛵","🧳","🎒","🗺️","🧭",
+  "🍣","🍜","🍕","🥐","🌮","🍷","🍻","☕","🎉","💍","❤️","🎂","🏄","⛷️","🤿","🐘","🦁","🐨","🐼","🐠"];
 const PERSON_EMOJI = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁","🐵","🐰","🐢"];
-const AVATARS = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁","🐵","🐰","🐢","🐶","🐱","🐻","🐷","🐮","🦉","🐳","🦋","🐝","🦖","😎","🥳","🤠","🧑‍🚀","🏄","🧳"];
-const COLORS = ["#FFB4A2","#A8E6CF","#FFD3B6","#B5C7FF","#F8C8F0","#FFE29A","#9FE2F2","#D4C1FF"];
+const AVATARS = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁","🐵","🐰","🐢","🐶","🐱","🐻","🐻‍❄️","🐷","🐮","🐹","🐭","🦝","🦔","🐿️","🦉",
+  "🐳","🐬","🦈","🐠","🦩","🦜","🦋","🐝","🐞","🦀","🦖","🐲",
+  "😎","🥳","🤠","🤓","🤩","😇","🥸","🤑","😴","👻","👽","🤖",
+  "🧑‍🚀","🏄","🧳","👑","🌟","🌈","🍀","🌻","🍉","🍩","🍦","☕","🎸","⚽","🏀","📸"];
+const TRIP_COLORS = ["#3F4FF0","#7A45D6","#C93576","#D9483B","#C2620F","#A87A00","#23864A","#0B8577","#1A73C7","#3F4C6B"];
+const tripColor = t => /^#[0-9a-f]{6}$/i.test((t && t.color) || "") ? t.color : "#3F4FF0";
+function colorSwatches(current, act){ return `<div class="swatches">${TRIP_COLORS.map(c => `<button type="button" class="sw ${current === c ? "on" : ""}" style="background:${c}" data-act="${act}" data-c="${c}" aria-label="Colour ${c}"></button>`).join("")}</div>`; }
+const COLORS_BASE = ["#FFB4A2","#A8E6CF","#FFD3B6","#B5C7FF","#F8C8F0","#FFE29A","#9FE2F2","#D4C1FF"];
+const COLORS = [...COLORS_BASE, "#C7F0A8","#FFC2D1","#E2E8F0","#FBD38D"];
 const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer"];
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"],["personal","🔒 Me"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.12-d"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.12-e"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -362,7 +376,7 @@ function tripLink(id){ return location.origin + location.pathname + "#t-" + id; 
 (function migrateOldKeys(){ try { const keys = []; for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
   for (const k of keys) if (k && k.startsWith("tk-")){ const nk = "ww-" + k.slice(3); if (localStorage.getItem(nk) == null) localStorage.setItem(nk, localStorage.getItem(k)); localStorage.removeItem(k); } } catch {} })();
 function myTrips(){ try { return JSON.parse(lsGet("ww-trips") || "[]"); } catch { return []; } }
-function rememberTrip(t){ const all = myTrips(), old = all.find(x => x.id === t.id) || {}, list = all.filter(x => x.id !== t.id); list.unshift({id:t.id, name:t.name, emoji:t.emoji, currency:t.currency, people:(t.people||[]).length, seen:Date.now(), archived:!!old.archived}); lsSet("ww-trips", JSON.stringify(list.slice(0, 50))); }
+function rememberTrip(t){ const all = myTrips(), old = all.find(x => x.id === t.id) || {}, list = all.filter(x => x.id !== t.id); list.unshift({id:t.id, name:t.name, emoji:t.emoji, color:t.color, currency:t.currency, people:(t.people||[]).length, seen:Date.now(), archived:!!old.archived}); lsSet("ww-trips", JSON.stringify(list.slice(0, 50))); }
 function isArchived(id){ return !!(myTrips().find(x => x.id === id) || {}).archived; }
 function setArchived(id, flag){ lsSet("ww-trips", JSON.stringify(myTrips().map(x => x.id === id ? {...x, archived:flag} : x))); }
 function forgetTrip(id){ lsSet("ww-trips", JSON.stringify(myTrips().filter(x => x.id !== id))); }
@@ -614,14 +628,14 @@ function homeView(){
   const all = myTrips(), list = all.filter(t => !t.archived), arch = all.filter(t => t.archived);
   const card = t => `
     <button class="pass" data-act="open" data-id="${esc(t.id)}">
-      <span class="stub">${esc(t.emoji||"✈️")}</span>
+      <span class="stub" style="background:${tripColor(t)}">${esc(t.emoji||"✈️")}</span>
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
     </button>`;
   const archived = arch.length ? `<details class="arch"><summary>📦 Archived trips (${arch.length})</summary><div class="stack" style="margin-top:10px">${arch.map(card).join("")}</div></details>` : "";
   const cards = list.length ? list.map(t => `
     <button class="pass" data-act="open" data-id="${esc(t.id)}">
-      <span class="stub">${esc(t.emoji||"✈️")}</span>
+      <span class="stub" style="background:${tripColor(t)}">${esc(t.emoji||"✈️")}</span>
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
     </button>`).join("")
@@ -673,7 +687,7 @@ function tripView(){
     ${S.offline ? `<div class="banner">📴 Offline. Showing what's saved on this phone.${S.pending ? ` ${S.pending} change${S.pending===1?"":"s"} will sync when you're back online.` : " New changes will sync later."}</div>` : S.pending ? `<div class="banner">⏳ Syncing ${S.pending} change${S.pending===1?"":"s"}…</div>` : ""}
     ${isArchived(t.id) ? `<div class="banner row"><span class="grow">📦 Archived on this phone.</span><button class="btn sm" data-act="archive" data-v="0">Unarchive</button></div>` : ""}
     <div class="trip-layout"><aside class="trip-side">
-    <section class="hero">
+    <section class="hero" style="background:${tripColor(t)}">
       <span class="emoji" aria-hidden="true">${esc(t.emoji||"✈️")}</span>
       <div class="sub">Total trip spend</div>
       <div class="total num">${fmt(total, t.currency)}</div>
@@ -876,6 +890,8 @@ function settingsTab(t, exps){
       <p class="muted" style="margin:0 0 8px;font-size:13px">New foreign-currency expenses fill in today's rate automatically (<a href="https://www.exchangerate-api.com" target="_blank" rel="noopener" style="color:inherit">Rates by Exchange Rate API</a>). You can always change it. Saved rates below are used when you're offline.</p>
       ${rates.length ? `<form class="stack" style="gap:8px" data-form="rates">${rates.map(([c, r]) => `<div class="rate-row"><span>1 ${esc(c)} =</span><input class="input num" id="rate-${esc(c)}" data-rate="${esc(c)}" inputmode="decimal" value="${esc(r)}"><span>${esc(t.currency)}</span></div>`).join("")}<button class="btn primary">Save rates</button></form>` : `<p class="muted" style="margin:0;font-size:14px">None yet. Pick a different currency when adding an expense.</p>`}
     </div>
+    <button class="card look-card" data-act="open-look"><span class="look-preview" style="background:${tripColor(t)}">${esc(t.emoji || "✈️")}</span>
+      <span class="grow" style="text-align:left"><b>Trip look</b><span class="note muted" style="display:block">Change the icon and colour</span></span><span aria-hidden="true">▸</span></button>
     <div class="card"><div class="label" style="margin-bottom:8px">Trip details</div>
       <form class="stack" data-form="trip-details">
         <input class="input" id="trip-name-edit" value="${esc(t.name)}" maxlength="40" aria-label="Trip name">
@@ -920,7 +936,7 @@ function whoAmISheet(){
     <button class="btn ghost block" data-act="close" style="margin-top:16px">I'm just looking</button>`);
 }
 function newTripSheet(){
-  draft = { kind:"trip", name:"", emoji:TRIP_EMOJI[0], currency: lsGet("ww-cur") || "USD", people:[], methods:[...DEFAULT_METHODS] };
+  draft = { kind:"trip", name:"", emoji:TRIP_EMOJI[0], color:TRIP_COLORS[0], currency: lsGet("ww-cur") || "USD", people:[], methods:[...DEFAULT_METHODS] };
   renderTripSheet();
 }
 function renderTripSheet(){
@@ -928,7 +944,8 @@ function renderTripSheet(){
   openSheet(`<h2>Where are we going? ✈️</h2>
     <form class="stack" data-form="create-trip">
       <div class="field"><label class="label" for="trip-name">Trip name</label><input class="input" id="trip-name" maxlength="40" placeholder="Bali with the besties" value="${esc(d.name)}" required></div>
-      <div class="field"><span class="label">Pick a vibe</span><div class="emoji-pick">${TRIP_EMOJI.map(e => `<button type="button" class="${d.emoji===e?"on":""}" data-act="trip-emoji" data-e="${e}">${e}</button>`).join("")}</div></div>
+      <div class="field"><span class="label">Pick a vibe</span><div class="emoji-pick trip-pick">${TRIP_EMOJI.map(e => `<button type="button" class="${d.emoji===e?"on":""}" data-act="trip-emoji" data-e="${e}">${e}</button>`).join("")}</div></div>
+      <div class="field"><span class="label">Colour</span><div class="row"><span class="look-preview" style="background:${tripColor(d)}">${esc(d.emoji)}</span>${colorSwatches(tripColor(d), "trip-color")}</div></div>
       <div class="field"><label class="label" for="trip-cur">Home currency (balances are shown in this)</label><select class="input" id="trip-cur">${curList(d.currency).map(c => `<option ${c===d.currency?"selected":""}>${c}</option>`).join("")}</select></div>
       <div class="field"><span class="label">Dates (optional)</span>
         <div class="grid2"><input class="input" type="date" id="trip-start" aria-label="Start date" value="${esc(d.start||"")}"><input class="input" type="date" id="trip-end" aria-label="End date" value="${esc(d.end||"")}"></div></div>
@@ -941,6 +958,16 @@ function renderTripSheet(){
       <button class="btn primary block" ${d.people.length?"":"disabled"}>Start the trip ✈️</button>
       <button type="button" class="btn ghost block" data-act="close">Cancel</button>
     </form>`);
+}
+function lookSheet(){ const t = trip(); draft = {kind:"look", emoji:t.emoji || "✈️", color:tripColor(t)}; renderLookSheet(); }
+function renderLookSheet(){
+  const d = draft, t = trip();
+  openSheet(`<div class="xs-head"><h2 class="grow">Trip look 🎨</h2><button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button></div>
+    <div class="hero look-hero" style="background:${d.color}"><span class="emoji" aria-hidden="true">${esc(d.emoji)}</span><div class="sub">Preview</div><div class="total" style="font-size:28px">${esc(t.name)}</div></div>
+    <div class="label" style="margin:14px 0 6px">Colour</div>${colorSwatches(d.color, "look-color")}
+    <div class="label" style="margin:14px 0 6px">Icon</div>
+    <div class="emoji-pick trip-pick">${TRIP_EMOJI.map(e => `<button type="button" class="${d.emoji === e ? "on" : ""}" data-act="look-emoji" data-e="${e}">${e}</button>`).join("")}</div>
+    <div class="sheet-foot"><button type="button" class="btn primary block" data-act="look-save">Save look</button></div>`);
 }
 function avatarPicker(p){
   return `<div class="row"><span class="face xl" style="background:${esc(p.color)}" aria-hidden="true">${esc(p.emoji)}</span><b>${esc(p.name)}</b></div>
@@ -1255,6 +1282,11 @@ document.addEventListener("click", async ev => {
   if (act === "edit"){ const e = S.expenses.find(x => x.id === el.dataset.id); if (e) expenseSheet(e); return; }
   if (act === "copy-link") return copyText($("#share-link").textContent, $("#share-link"));
   if (act === "trip-emoji"){ syncTripDraft(); draft.emoji = el.dataset.e; return renderTripSheet(); }
+  if (act === "trip-color"){ syncTripDraft(); draft.color = el.dataset.c; return renderTripSheet(); }
+  if (act === "open-look") return lookSheet();
+  if ((act === "look-emoji" || act === "look-color") && draft && draft.kind === "look"){ draft[act === "look-emoji" ? "emoji" : "color"] = act === "look-emoji" ? el.dataset.e : el.dataset.c; return renderLookSheet(); }
+  if (act === "look-save" && draft && draft.kind === "look"){ const d = draft; closeSheet();
+    write([patchTrip({emoji:d.emoji, color:d.color})], "New look saved ✨", [t.id, "trip", `changed the trip look to ${d.emoji}`]); return; }
   if (act === "draft-add-person") return addDraftPerson();
   if (act === "draft-avatar"){ syncTripDraft(); draft.pick = draft.pick === +el.dataset.i ? null : +el.dataset.i; return renderTripSheet(); }
   if (act === "av-done"){ syncTripDraft(); draft.pick = null; return renderTripSheet(); }
@@ -1402,7 +1434,7 @@ document.addEventListener("submit", async ev => {
     if (!draft.name.trim() || !draft.people.length) return;
     if (draft.start && draft.end && draft.end < draft.start){ toast("The end date is before the start date."); return; }
     const id = newId(), d = draft; lsSet("ww-cur", d.currency);
-    const data = { name:d.name.trim(), emoji:d.emoji, currency:d.currency, people:d.people, methods:d.methods, rates:{}, start:d.start||"", end:d.end||"", createdAt:Date.now() };
+    const data = { name:d.name.trim(), emoji:d.emoji, color:tripColor(d), currency:d.currency, people:d.people, methods:d.methods, rates:{}, start:d.start||"", end:d.end||"", createdAt:Date.now() };
     closeSheet();
     lsSet("ww-me-" + id, d.people[0].id); rememberTrip({id, ...data});
     write([putTrip(id, data)], "Trip created! Bon voyage ✈️", [id, "trip", `created the trip with ${d.people.map(p => p.name).join(", ")}`]);
@@ -1602,7 +1634,7 @@ async function shareSummary(){
   fit(`${t.emoji || "✈️"} ${t.name}`, D, 76, W - 140); x.fillStyle = "#FFFFFF"; x.fillText(`${t.emoji || "✈️"} ${t.name}`, 70, 260);
   const sub = [t.start ? (niceDate(t.start) + (t.end ? " – " + niceDate(t.end) : "")) : "", `${real.length} expenses`, `${(t.people||[]).length} travellers`].filter(Boolean).join("  ·  ");
   x.font = `500 32px ${B}`; x.fillStyle = "#97A0BE"; x.fillText(sub, 70, 315);
-  rr(70, 360, W - 140, 200, 36, "#3F4FF0");
+  rr(70, 360, W - 140, 200, 36, tripColor(t));
   x.fillStyle = "rgba(255,255,255,.8)"; x.font = `600 30px ${B}`; x.fillText("Total spent", 110, 420);
   fit(fmt(total, t.currency), D, 96, W - 220); x.fillStyle = "#FFFFFF"; x.fillText(fmt(total, t.currency), 110, 515);
   let y = 620; x.fillStyle = "#97A0BE"; x.font = `700 26px ${B}`; x.fillText("WHO PAID · WHO OWES", 70, y); y += 26;
