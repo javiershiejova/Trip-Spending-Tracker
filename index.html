@@ -275,6 +275,10 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
   .trip-layout{grid-template-columns:360px minmax(0,1fr);gap:28px}
   .brand h1{font-size:36px}
 }
+.pre-head{margin:22px 0 2px;padding:8px 12px;border-radius:12px;background:var(--chip);font-weight:800;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.place-row{display:grid;grid-template-columns:48px minmax(0,1fr) minmax(0,1.3fr);gap:8px}
+.place-row .icon-btn{width:48px;height:48px}
+.toast.row{display:flex;align-items:center;padding:8px 8px 8px 16px}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -297,9 +301,9 @@ const AVATARS = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁",
 const COLORS = ["#FFB4A2","#A8E6CF","#FFD3B6","#B5C7FF","#F8C8F0","#FFE29A","#9FE2F2","#D4C1FF"];
 const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer"];
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
-const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"]];
+const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"],["personal","🔒 Me"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.12-c"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.12-d"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -321,6 +325,15 @@ function themeBtn(){ const light = document.documentElement.dataset.theme === "l
 const dayDiff = (a, b) => Math.round((new Date(b+"T12:00:00") - new Date(a+"T12:00:00")) / 86400000);
 
 function trip(){ return S.trip; }
+const isShared = e => e.type !== "settle" && e.mode !== "personal";       // counts in the group's spending
+const lastDay = e => { const d = new Date((e.date || today()) + "T12:00:00"); d.setDate(d.getDate() + Math.max(1, e.days || 1) - 1); return iso(d); };
+const isPre = (t, e) => !!(t.start && e.date && lastDay(e) < t.start);      // paid before the trip started
+function dailyAmounts(t, list){   // spread multi-day costs across their days; skip anything before the trip
+  const m = {};
+  for (const e of list){ if (!e.date) continue; const n = Math.max(1, e.days || 1), per = e.amount / n;
+    for (let i = 0; i < n; i++){ const d = new Date(e.date + "T12:00:00"); d.setDate(d.getDate() + i); const k = iso(d); if (t.start && k < t.start) continue; m[k] = (m[k] || 0) + per; } }
+  return m;
+}
 function validCur(c){ if (!/^[A-Z]{3}$/.test(c||"")) return false; try { new Intl.NumberFormat(undefined,{style:"currency",currency:c}); return true; } catch { return false; } }
 function decimals(cur){ try { return new Intl.NumberFormat(undefined,{style:"currency",currency:cur}).resolvedOptions().maximumFractionDigits; } catch { return 2; } }
 function fmt(n, cur){ try { return new Intl.NumberFormat(undefined,{style:"currency",currency:cur}).format(n); } catch { return (cur||"")+" "+n.toFixed(2); } }
@@ -336,6 +349,12 @@ function ago(ts){ const s = (Date.now()-ts)/1000; if (s < 60) return "just now";
   return new Date(ts).toLocaleDateString(undefined,{day:"numeric",month:"short"})+" "+new Date(ts).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); }
 function me(){ return S.tripId ? lsGet("ww-me-" + S.tripId) || "" : ""; }
 function who(pid){ return pid ? (pid === me() ? "You" : person(S.trip || {}, pid).name) : "Someone"; }
+function toastAction(msg, label, fn){
+  const el = document.createElement("div"); el.className = "toast row"; el.style.gap = "12px";
+  el.innerHTML = `<span>${esc(msg)}</span><button class="btn sm sun">${esc(label)}</button>`;
+  el.querySelector("button").onclick = () => { el.remove(); fn(); };
+  document.body.appendChild(el); setTimeout(() => el.remove(), 6000);
+}
 function toast(msg){ const el = document.createElement("div"); el.className = "toast"; el.textContent = msg; document.body.appendChild(el); setTimeout(() => el.remove(), 2400); }
 function tripLink(id){ return location.origin + location.pathname + "#t-" + id; }
 
@@ -380,7 +399,7 @@ function applyOps(snap, ops){
 function compose(){
   const tid = S.tripId; if (!tid) return;
   const v = applyOps(base[tid] || {trip:null, expenses:[], activity:[]}, pendingFor(tid));
-  S.trip = v.trip; S.expenses = v.expenses; S.activity = v.activity; S.pending = pendingFor(tid).filter(o => o.kind !== "activity").length;
+  S.trip = v.trip; S.expenses = v.expenses.filter(e => !e.deletedAt); S.trash = v.expenses.filter(e => e.deletedAt); S.activity = v.activity; S.pending = pendingFor(tid).filter(o => o.kind !== "activity").length;
   if (S.trip) rememberTrip(S.trip);
 }
 async function loadTrip(quiet){
@@ -398,6 +417,8 @@ async function loadTrip(quiet){
       expenses: check(e).map(r => ({id:r.id, ...r.data})),
       activity: check(a).map(r => ({id:r.id, ...r.data, at: r.data.at || Date.parse(r.created_at)})) };
     base[tid] = snap; writeCache(tid, snap);
+    const old = snap.expenses.filter(e => e.deletedAt && Date.now() - e.deletedAt > 30 * 864e5 && !pendingFor(tid).some(o => o.id === e.id));
+    if (old.length && tid === S.tripId) setTimeout(() => write(old.map(e => delExpense(e.id))), 0);   // bin keeps things 30 days
     if (tid === S.tripId){ S.offline = false; S.loadError = ""; }
   } catch (err){
     if (tid !== S.tripId) return;
@@ -483,6 +504,9 @@ function diffText(t, a, b){
   if (a.type !== "settle" && (a.cat||"") !== (b.cat||"")) ch.push(`category ${cat(a.cat).l} → ${cat(b.cat).l}`);
   if (sh(a) !== sh(b) && round(a.amount, 4) === round(b.amount, 4)) ch.push("who shares it");
   if ((a.notes||"") !== (b.notes||"")) ch.push("the note");
+  if ((a.place||"") !== (b.place||"")) ch.push(`place ${a.place || "—"} → ${b.place || "—"}`);
+  if ((a.days||1) !== (b.days||1)) ch.push(`spread ${a.days||1} → ${b.days||1} days`);
+  if ((a.mode === "personal") !== (b.mode === "personal")) ch.push(b.mode === "personal" ? "made it personal" : "made it shared");
   if ((a.receipt||null) !== (b.receipt||null)) ch.push(b.receipt ? "added a receipt" : "removed the receipt");
   return ch;
 }
@@ -506,6 +530,8 @@ function calcSplit(d, t){
   if (d.mode === "equal"){
     d.among.forEach(id => { if (ids.includes(id)) w[id] = 1; });
     const n = Object.keys(w).length; if (!n) err = "Pick at least one person to split with."; else status = n === 1 ? "One person pays it all" : `${n}-way split`;
+  } else if (d.mode === "personal"){
+    if (ids.includes(d.payer)){ w[d.payer] = 1; status = `Only ${person(t, d.payer).name} · not split with anyone`; } else err = "Pick who paid.";
   } else if (d.mode === "exact"){
     let sum = 0; ids.forEach(id => { const m = Math.round(parseAmt(d.exact[id]) * fE); if (m > 0){ w[id] = m; sum += m; } });
     const left = totalE - sum;
@@ -553,7 +579,7 @@ function settlePlan(net){
   return plan;
 }
 const MODE_LABEL = {exact:"exact split", percent:"split by %", shares:"split by shares", items:"itemized"};
-function splitLabel(e){ const n = Object.keys(e.shares||{}).length;
+function splitLabel(e){ if (e.mode === "personal") return "🔒 personal"; const n = Object.keys(e.shares||{}).length;
   return MODE_LABEL[e.mode] ? `${MODE_LABEL[e.mode]} · ${n} ${n===1?"person":"people"}` : `split ${n} way${n===1?"":"s"}`; }
 
 /* ---------- routing ---------- */
@@ -623,7 +649,7 @@ function tripView(){
     return `<div class="topbar"><button class="icon-btn" data-act="home" aria-label="All trips">←</button></div>
       <div class="empty"><span class="big">${msg[0]}</span><b>${msg[1]}</b>${msg[2] ? `<p class="muted">${msg[2]}</p>` : ""}${S.loaded ? `<div class="row" style="justify-content:center;flex-wrap:wrap"><button class="btn primary" data-act="retry">Try again</button>${!S.loadError ? `<button class="btn ghost" data-act="forget">Remove from my trips</button>` : ""}</div>` : ""}</div>`;
   }
-  const exps = S.expenses, real = exps.filter(e => e.type !== "settle");
+  const exps = S.expenses, real = exps.filter(isShared);
   const total = real.reduce((s, e) => s + e.amount, 0);
   const m = me(), {net, f} = balances(t, exps);
   let myLine = "";
@@ -690,14 +716,15 @@ function filtered(t, exps){
     if (S.fMethod && e.method !== S.fMethod) return false;
     if (S.fWho && e.payer !== S.fWho && !(e.shares||{})[S.fWho]) return false;
     if (!q) return true;
-    const hay = [e.desc, e.notes, e.method, cat(e.cat).l, person(t, e.payer).name, e.cur, String(e.amount), String(e.origAmount ?? ""),
+    const hay = [e.desc, e.notes, e.method, cat(e.cat).l, person(t, e.payer).name, e.cur, e.place, String(e.amount), String(e.origAmount ?? ""),
       ...(e.inputs && e.inputs.items ? e.inputs.items.map(i => i.name) : []), e.type === "settle" ? "settle pay back" : ""].join(" ").toLowerCase();
     return hay.includes(q);
   });
 }
 function expensesTab(t, exps, m){
   if (!S.loaded) return `<div class="empty"><span class="big">🧾</span><b>Fetching receipts…</b></div>`;
-  if (!exps.length) return `<div class="empty"><span class="big">🍦</span><b>Nothing spent yet</b><p class="muted">Bought the first round? Tap “Add expense” and the tracker starts counting.</p></div>`;
+  const bin = (S.trash || []).length ? `<button class="btn ghost block" style="margin-top:16px" data-act="open-bin">🗑️ Recently deleted (${S.trash.length})</button>` : "";
+  if (!exps.length) return bin + `<div class="empty"><span class="big">🍦</span><b>Nothing spent yet</b><p class="muted">Bought the first round? Tap “Add expense” and the tracker starts counting.</p></div>`;
   const methods = [...new Set([...(t.methods||[]), ...exps.map(e => e.method).filter(Boolean)])];
   return `<div class="filters">
       <input class="input" id="q" type="search" placeholder="🔍 Search expenses, notes, items…" value="${esc(S.q)}" autocomplete="off">
@@ -707,7 +734,7 @@ function expensesTab(t, exps, m){
         <select id="f-method" class="${S.fMethod?"on":""}" aria-label="Filter by payment method"><option value="">All methods</option>${methods.map(x => `<option ${S.fMethod===x?"selected":""}>${esc(x)}</option>`).join("")}</select>
       </div>
     </div>
-    <div id="exp-list">${expList(t, exps, m)}</div>`;
+    <div id="exp-list">${expList(t, exps, m)}</div>${bin}`;
 }
 function expList(t, exps, m){
   const list = filtered(t, exps), isF = S.q || S.fCat || S.fWho || S.fMethod;
@@ -717,9 +744,13 @@ function expList(t, exps, m){
   if (!list.length) return head + `<div class="empty" style="margin-top:10px"><span class="big">🔎</span><b>Nothing matches</b><p class="muted">Try another word or clear the filters.</p></div>`;
   const byDay = {};
   [...list].sort((a,b) => (b.date||"").localeCompare(a.date||"") || (b.createdAt||0)-(a.createdAt||0)).forEach(e => (byDay[e.date||""] ||= []).push(e));
+  let preShown = false;
+  const preTotal = list.filter(e => isShared(e) && isPre(t, e)).reduce((s, e) => s + e.amount, 0);
   return head + Object.entries(byDay).map(([d, items]) => {
-    const dayTotal = items.filter(e=>e.type!=="settle").reduce((s,e)=>s+e.amount,0);
-    return `<div class="row day"><span class="label grow">${esc(niceDate(d))}</span><span class="label num">${dayTotal ? fmt(dayTotal, t.currency) : ""}</span></div>` +
+    const dayTotal = items.filter(isShared).reduce((s,e)=>s+e.amount,0);
+    let pre = "";
+    if (t.start && d && d < t.start && !preShown){ preShown = true; pre = `<div class="pre-head row"><span class="grow">✈️ Before the trip</span><span class="num">${preTotal ? fmt(preTotal, t.currency) : ""}</span></div>`; }
+    return pre + `<div class="row day"><span class="label grow">${esc(niceDate(d))}</span><span class="label num">${dayTotal ? fmt(dayTotal, t.currency) : ""}</span></div>` +
     items.map(e => {
       const payer = person(t, e.payer);
       if (e.type === "settle"){
@@ -728,13 +759,14 @@ function expList(t, exps, m){
       }
       const c = cat(e.cat);
       let mine = "";
-      if (m){ const share = (e.shares||{})[m] || 0, paid = e.payer === m ? e.amount : 0, d = round(paid - share, 6);
+      if (m && e.mode === "personal") mine = e.payer === m ? `<div class="mine muted">🔒 yours</div>` : `<div class="mine muted">not involved</div>`;
+      else if (m){ const share = (e.shares||{})[m] || 0, paid = e.payer === m ? e.amount : 0, d = round(paid - share, 6);
         if (Math.abs(d) > 0.0001) mine = `<div class="mine num ${d>0?"pos":"neg"}">${d>0?"you lent":"you owe"} ${fmt(Math.abs(d), t.currency)}</div>`;
         else if (share || paid) mine = `<div class="mine muted">settled</div>`; else mine = `<div class="mine muted">not involved</div>`; }
       const orig = e.cur && e.cur !== t.currency ? `<div class="mine muted num">${fmt(e.origAmount, e.cur)}</div>` : "";
       return `<button class="exp" data-act="edit" data-id="${esc(e.id)}">
         <span class="cat" aria-hidden="true">${c.e}</span>
-        <span class="grow"><div class="t">${esc(e.desc || c.l)}${e.receipt ? " 🧾" : ""}${e.notes ? " 📝" : ""}</div><div class="m">${esc(payer.name)} paid · ${esc(e.method||"")} · ${splitLabel(e)}</div></span>
+        <span class="grow"><div class="t">${esc(e.desc || c.l)}${e.receipt ? " 🧾" : ""}${e.notes ? " 📝" : ""}</div><div class="m">${esc([e.place ? "📍 " + e.place : "", payer.name + " paid", e.method, splitLabel(e), (e.days||1) > 1 ? `📅 ${e.days} days` : ""].filter(Boolean).join(" · "))}</div></span>
         <span><div class="amt num">${fmt(e.amount, t.currency)}</div>${orig}${mine}</span></button>`;
     }).join("");
   }).join("");
@@ -756,7 +788,7 @@ function balancesTab(t, net, f){
 }
 function niceMax(v){ if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); for (const m of [1,1.5,2,2.5,3,4,5,6,8,10]) if (m*p >= v) return m*p; return 10*p; }
 function dailyChart(t, real){
-  const m = {}; real.forEach(e => { if (e.date) m[e.date] = (m[e.date]||0) + e.amount; });
+  const m = dailyAmounts(t, real);
   const keys = Object.keys(m).sort(); if (!keys.length) return "";
   let first = keys[0], last = keys[keys.length-1];
   if (t.start && t.start < first) first = t.start;
@@ -787,13 +819,18 @@ function statsTab(t, real, total){
   const group = (key) => { const m = {}; real.forEach(e => { const k = key(e); m[k] = (m[k]||0) + e.amount; }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
   const block = (title, rows, label) => `<div class="card"><div class="label" style="margin-bottom:6px">${title}</div>${rows.map(([k,v]) =>
     `<div class="stat"><span>${label(k)}</span><span class="num" style="font-weight:700">${fmt(v, t.currency)} <span class="muted" style="font-weight:500">${Math.round(v/total*100)}%</span></span><div class="bar"><i style="left:0;width:${v/rows[0][1]*100}%;background:var(--accent)"></i></div></div>`).join("")}</div>`;
-  const days = tripDaysSoFar(t) || new Set(real.map(e=>e.date)).size;
+  const daily = dailyAmounts(t, real), inTrip = Object.values(daily).reduce((a, b) => a + b, 0);
+  const days = tripDaysSoFar(t) || Object.keys(daily).length;
+  const pre = real.filter(e => isPre(t, e)).reduce((a, e) => a + e.amount, 0);
+  const personal = {}; S.expenses.filter(e => e.mode === "personal").forEach(e => personal[e.payer] = (personal[e.payer] || 0) + e.amount);
+  const places = {}; real.forEach(e => { if (e.place) places[e.place] = (places[e.place] || 0) + e.amount; });
   const consumed = {}; real.forEach(e => Object.entries(e.shares||{}).forEach(([id, v]) => consumed[id] = (consumed[id]||0) + v));
   const big = v => `<div class="num" style="font-family:var(--display);font-weight:800;font-size:20px">${fmt(v, t.currency)}</div>`;
   const pl = k => { const p = person(t,k); return `<span class="row" style="gap:8px">${face(p)}${esc(p.name)}</span>`; };
   return `<div class="stack">
     <div class="card row" style="justify-content:space-around;text-align:center;flex-wrap:wrap">
-      <div><div class="label">Per day</div>${big(total/Math.max(1,days))}</div>
+      <div><div class="label">Per day</div>${big(inTrip/Math.max(1,days))}</div>
+      ${pre ? `<div><div class="label">Before trip</div>${big(pre)}</div>` : ""}
       <div><div class="label">Per person</div>${big(total/Math.max(1,(t.people||[]).length))}</div>
       <div><div class="label">Biggest</div>${big(Math.max(...real.map(e=>e.amount)))}</div>
     </div>
@@ -801,8 +838,10 @@ function statsTab(t, real, total){
     ${dailyChart(t, real)}
     ${block("By category", group(e=>e.cat), k => { const c = cat(k); return c.e + " " + c.l; })}
     ${block("By payment method", group(e=>e.method||"Other"), k => esc(k))}
+    ${Object.keys(places).length ? block("By place", Object.entries(places).sort((a,b)=>b[1]-a[1]), k => "📍 " + esc(k)) : ""}
     ${block("Who paid upfront", group(e=>e.payer), pl)}
     ${block("Each person's share of the spending", Object.entries(consumed).sort((a,b)=>b[1]-a[1]), pl)}
+    ${Object.keys(personal).length ? `<div class="card"><div class="label" style="margin-bottom:6px">🔒 Personal spending (not split)</div>${Object.entries(personal).sort((a,b)=>b[1]-a[1]).map(([k, v]) => `<div class="row" style="padding:5px 0">${pl(k)}<span class="grow"></span><b class="num">${fmt(v, t.currency)}</b></div>`).join("")}</div>` : ""}
   </div>`;
 }
 function catSpent(real, k){ return real.filter(e => e.cat === k).reduce((s, e) => s + e.amount, 0); }
@@ -857,6 +896,8 @@ function settingsTab(t, exps){
     <div class="card row"><span class="label grow">Appearance</span>
       <div class="seg" style="width:180px"><button class="${document.documentElement.dataset.theme!=="light"?"on":""}" data-act="theme-set" data-v="dark">🌙 Dark</button><button class="${document.documentElement.dataset.theme==="light"?"on":""}" data-act="theme-set" data-v="light">☀️ Light</button></div></div>
     <button class="btn ghost block" data-act="export">📄 Export to spreadsheet (CSV)</button>
+    <button class="btn ghost block" data-act="import-pick">📥 Import from spreadsheet (CSV)</button>
+    <input type="file" id="import-file" accept=".csv,text/csv,text/plain" hidden>
     <button class="btn ghost block" data-act="archive" data-v="${isArchived(t.id) ? "0" : "1"}">${isArchived(t.id) ? "📤 Unarchive trip" : "📦 Archive trip (hide from my list)"}</button>
     <button class="btn ghost block" data-act="forget">Remove from this phone's list</button>
     <button class="btn danger block" data-act="del-trip">Delete this trip for everyone</button>
@@ -930,17 +971,32 @@ function expenseSheet(e){
       mode:e.mode||"equal", among:new Set(inp.among || (!e.mode || e.mode==="equal" ? Object.keys(e.shares||{}) : ids)),
       exact:{...(inp.exact||{})}, percent:{...(inp.percent||{})}, shareN:{...(inp.shares||{})},
       items:(inp.items||[]).map(i => ({name:i.name||"", amount:String(i.amount??""), who:[...(i.who||[])]})),
-      receipt:e.receipt||null, receiptUrl:receiptUrl(e.receipt), createdBy:e.createdBy, createdAt:e.createdAt, confirmDel:false };
+      receipt:e.receipt||null, receiptUrl:receiptUrl(e.receipt), createdBy:e.createdBy, createdAt:e.createdAt, confirmDel:false, place:e.place || "", days:e.days || 1 };
     if (e.mode === "exact" && !inp.exact) for (const [id,v] of Object.entries(e.shares||{})) draft.exact[id] = String(v);
   } else {
     const lastCur = lsGet("ww-lastcur-" + t.id);
     const cur = lastCur && validCur(lastCur) ? lastCur : t.currency;
     draft = { kind:"exp", id:null, type:"exp", amount:"", cur, rate:String((t.rates||{})[cur] ?? ""), desc:"", cat:"food",
       payer: ids.includes(m) ? m : ids[0], method:(t.methods||[])[0]||"", notes:"", date:today(),
-      mode:"equal", among:new Set(ids), exact:{}, percent:{}, shareN:{}, items:[], receipt:null, receiptUrl:null, confirmDel:false };
+      mode:"equal", among:new Set(ids), exact:{}, percent:{}, shareN:{}, items:[], receipt:null, receiptUrl:null, confirmDel:false, place:lsGet("ww-lastplace-" + t.id) || "", days:1 };
   }
   draft.view = "main"; renderExpenseSheet();
   if (!e) autoRate();
+}
+function restoreExpense(id){
+  const t = trip(), e = (S.trash || []).find(x => x.id === id); if (!e) return;
+  const {id:_x, deletedAt, deletedBy, ...body} = e;
+  write([putExpense(id, body)], "Restored ↩️", [t.id, "edit", `restored ${e.type === "settle" ? "a pay-back" : e.desc || "an expense"} · ${fmt(e.amount, t.currency)}`]);
+  if (draft && draft.kind === "bin") binSheet();
+}
+function binSheet(){
+  const t = trip(), items = [...(S.trash || [])].sort((a, b) => b.deletedAt - a.deletedAt); draft = {kind:"bin"};
+  openSheet(`<div class="xs-head"><h2 class="grow">Recently deleted 🗑️</h2><button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button></div>
+    <p class="note muted" style="margin-top:0">Deleted expenses stay here for 30 days, then they're removed for good.</p>
+    ${items.length ? `<div class="stack" style="gap:8px">${items.map(e => `<div class="qrow"><div class="qbtn grow" style="cursor:default"><span class="cat sm">${e.type === "settle" ? "🤝" : cat(e.cat).e}</span>
+        <span class="grow" style="min-width:0"><b>${esc(e.type === "settle" ? "Pay-back" : (e.desc || cat(e.cat).l))}</b><span class="note muted" style="display:block">${fmt(e.amount, t.currency)} · by ${esc(who(e.deletedBy))} ${esc(ago(e.deletedAt))} · ${Math.max(0, 30 - Math.floor((Date.now() - e.deletedAt) / 864e5))} days left</span></span></div>
+        <button type="button" class="btn sm" data-act="restore" data-id="${esc(e.id)}">Restore</button></div>`).join("")}</div>
+      <button type="button" class="btn danger block" style="margin-top:14px" data-act="empty-bin">Empty bin now</button>` : `<p class="muted">Nothing here.</p>`}`);
 }
 function settleSheet(from, to, minor){
   const t = trip(), f = 10 ** decimals(t.currency);
@@ -988,7 +1044,9 @@ function splitSummary(){
   const t = trip(), d = draft, r = calcSplit(d, t);
   if (r.err) return {text:"⚠️ " + r.err, bad:true};
   const n = Object.keys(r.prevE).length, names = {equal:"Equal", exact:"Exact amounts", percent:"By %", shares:"By shares", items:"Itemized"};
-  return {text:`${names[d.mode]} · ${n} ${n===1?"person":"people"}`, bad:false};
+  const days = (d.days || 1) > 1 ? ` · ${d.days} days` : "";
+  if (d.mode === "personal") return {text:`🔒 Personal · ${person(t, d.payer).name} only${days}`, bad:false};
+  return {text:`${names[d.mode]} · ${n} ${n===1?"person":"people"}${days}`, bad:false};
 }
 function renderExpenseSheet(){
   const t = trip(), d = draft;
@@ -1020,7 +1078,11 @@ function renderExpenseSheet(){
         <input class="input" type="date" id="exp-date" aria-label="Date" value="${esc(d.date)}">
         ${settle ? "<span></span>" : `<button type="button" class="input split-btn ${sum.bad?"bad":""}" data-act="open-split" aria-label="Split: ${esc(sum.text)}"><span class="grow">🍕 ${esc(sum.text)}</span><span aria-hidden="true">▸</span></button>`}
       </div>
-      <input class="input" id="exp-notes" maxlength="500" placeholder="${settle ? "📝 Note, e.g. PayNow ref 1234" : "📝 Note (optional)"}" aria-label="Note" value="${esc(d.notes)}">
+      ${settle ? `<input class="input" id="exp-notes" maxlength="500" placeholder="📝 Note, e.g. PayNow ref 1234" aria-label="Note" value="${esc(d.notes)}">` : `
+      <div class="place-row"><button type="button" class="icon-btn" data-act="locate" aria-label="Use my current location">📍</button>
+        <input class="input" id="exp-place" list="ww-places" maxlength="40" placeholder="Place" aria-label="Place" value="${esc(d.place || "")}">
+        <input class="input" id="exp-notes" maxlength="500" placeholder="📝 Note" aria-label="Note" value="${esc(d.notes)}"></div>
+      <datalist id="ww-places">${[...new Set(S.expenses.map(e => e.place).filter(Boolean))].slice(0, 30).map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist>`}
       <div class="sheet-foot">
         <div id="exp-err" class="note neg" role="alert"></div>
         <div class="row">${d.id ? `<button type="button" class="btn danger" data-act="d-del">${d.confirmDel ? "Tap again" : "Delete"}</button>` : ""}<button class="btn primary grow">${d.id ? "Save changes" : "Add expense"}</button></div>
@@ -1032,6 +1094,11 @@ function renderSplitView(){
   openSheet(`<div class="xs-head"><button type="button" class="icon-btn" data-act="split-done" aria-label="Back">←</button><h2 class="grow">Split it 🍕</h2></div>
     <div class="seg" role="group" aria-label="Split type">${MODES.map(([k,l]) => `<button type="button" class="${d.mode===k?"on":""}" data-act="d-mode" data-v="${k}">${l}</button>`).join("")}</div>
     <div id="split-box" style="margin-top:12px">${splitBox()}</div>
+    <div class="card" style="margin-top:14px">
+      <div class="row"><label class="label grow" for="exp-days">📅 Spread the cost over</label>
+        <input class="input num" id="exp-days" inputmode="numeric" maxlength="2" value="${esc(d.days || 1)}" style="width:72px;text-align:center"><span>day${(d.days||1) > 1 ? "s" : ""}</span></div>
+      <p class="note muted" style="margin:6px 0 0">For hotels, passes or car hire: the cost is shared out across the days in the daily chart and per-day average. Use the first day as the date.</p>
+    </div>
     <div class="sheet-foot"><button type="button" class="btn primary block" data-act="split-done">Done</button></div>`);
 }
 function convLine(){ const t = trip(), d = draft, r = parseAmt(d.rate), a = parseAmt(d.amount);
@@ -1040,6 +1107,9 @@ function splitBox(){
   const t = trip(), d = draft, people = t.people||[], r = calcSplit(d, t);
   const prev = id => r.prevE[id] ? fmt(r.prevE[id]/r.fE, d.cur) : "";
   const status = `<div class="note num ${r.err ? "neg" : "pos"}" id="split-status" style="margin-top:4px">${esc(r.err || r.status)}</div>`;
+  if (d.mode === "personal"){
+    return `<p style="margin:0">${face(person(t, d.payer))} Only <b>${esc(person(t, d.payer).name)}</b> paid for and used this. It counts in their own spending (Stats tab) but isn't split, so nobody owes anything for it.</p>${status}`;
+  }
   if (d.mode === "equal"){
     return `<div class="chips">${people.map(p => { const on = d.among.has(p.id);
       return `<button type="button" class="chip ${on?"on":""}" data-act="d-among" data-v="${esc(p.id)}">${face(p)}${esc(p.name)}${on && r.totalE ? ` <small class="num">${prev(p.id)}</small>` : ""}</button>`; }).join("")}</div>
@@ -1127,12 +1197,12 @@ function shareSheet(){
 function buildCSV(t, exps){
   const q = v => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const people = t.people || [];
-  const head = ["Date","Type","Description","Category","Paid by","Payment method",`Amount (${t.currency})`,"Original amount","Original currency","Exchange rate","Split type",...people.map(p => `${p.name} share (${t.currency})`),"Items","Notes","Receipt photo"];
+  const head = ["Date","Type","Description","Category","Paid by","Payment method",`Amount (${t.currency})`,"Original amount","Original currency","Exchange rate","Split type",...people.map(p => `${p.name} share (${t.currency})`),"Items","Notes","Place","Days","Personal","Receipt photo"];
   const rows = [...exps].sort((a,b) => (a.date||"").localeCompare(b.date||"") || (a.createdAt||0)-(b.createdAt||0)).map(e => {
     const settle = e.type === "settle";
     return [e.date, settle ? "Pay-back" : "Expense", settle ? `${person(t,e.payer).name} paid back ${person(t, Object.keys(e.shares||{})[0]).name}` : e.desc, settle ? "" : cat(e.cat).l,
       person(t, e.payer).name, e.method, e.amount, e.origAmount ?? e.amount, e.cur || t.currency, e.rate ?? 1, settle ? "" : (e.mode || "equal"),
-      ...people.map(p => (e.shares||{})[p.id] ?? ""), (e.inputs && e.inputs.items || []).map(i => `${i.name}: ${i.amount}`).join("; "), e.notes || "", e.receipt ? receiptUrl(e.receipt) : ""];
+      ...people.map(p => (e.shares||{})[p.id] ?? ""), (e.inputs && e.inputs.items || []).map(i => `${i.name}: ${i.amount}`).join("; "), e.notes || "", e.place || "", e.days || 1, e.mode === "personal" ? "yes" : "", e.receipt ? receiptUrl(e.receipt) : ""];
   });
   return [head, ...rows].map(r => r.map(q).join(",")).join("\r\n");
 }
@@ -1163,6 +1233,13 @@ document.addEventListener("click", async ev => {
   if (act === "theme" || act === "theme-set"){ const th = act === "theme-set" ? el.dataset.v : (document.documentElement.dataset.theme === "light" ? "dark" : "light"); lsSet("ww-theme", th); applyTheme(th); return render(); }
   if (act === "archive"){ const on = el.dataset.v === "1"; setArchived(t.id, on); toast(on ? "Archived 📦 Find it under Archived trips." : "Back in your trips 📤"); if (on) return go(null); return render(); }
   if (act === "summary") return shareSummary();
+  if (act === "open-bin") return binSheet();
+  if (act === "restore") return restoreExpense(el.dataset.id);
+  if (act === "empty-bin"){
+    if (el.dataset.armed !== "1"){ el.dataset.armed = "1"; el.textContent = "Tap again: delete these for good"; setTimeout(() => { if (el.isConnected){ el.dataset.armed = ""; el.textContent = "Empty bin now"; } }, 3500); return; }
+    const n = (S.trash || []).length; write((S.trash || []).map(e => delExpense(e.id)), "Bin emptied", [t.id, "delete", `emptied the bin (${n} item${n === 1 ? "" : "s"})`]); return binSheet(); }
+  if (act === "import-pick"){ const i = $("#import-file"); if (i) i.click(); return; }
+  if (act === "do-import") return runImport();
   if (act === "force-update"){ toast("Getting the latest version…"); return applyUpdate(); }
   if (act === "summary-share" && draft && draft.kind === "summary"){ try { await navigator.share({files:[draft.file], title:"Trip summary"}); } catch {} return; }
   if (act === "paste-link"){ try { const txt = await navigator.clipboard.readText(); const i = $("#join-link"); if (i) i.value = txt.trim(); } catch { toast("Tap and hold the box, then choose Paste."); } return; }
@@ -1194,6 +1271,22 @@ document.addEventListener("click", async ev => {
   if (act === "draft-rm-person"){ syncTripDraft(); draft.people.splice(+el.dataset.i, 1); draft.pick = null; return renderTripSheet(); }
   if (draft && draft.kind === "exp"){
     if (act === "view-receipt"){ syncExpDraft(); $("#lightbox-root").innerHTML = `<div class="lightbox" data-act="lightbox" role="dialog" aria-label="Receipt"><img src="${esc(draft.receiptUrl)}" alt="Receipt photo"><button type="button" class="btn danger" style="background:var(--surface)" data-act="rm-receipt">Remove photo</button></div>`; return; }
+    if (act === "locate"){
+      syncExpDraft(); if (!navigator.geolocation) return toast("Location isn't available on this device.");
+      const done = () => { if (el.isConnected){ el.disabled = false; el.textContent = "📍"; } };
+      el.disabled = true; el.textContent = "⏳"; const my = draft;
+      navigator.geolocation.getCurrentPosition(async pos => {
+        try {
+          const {latitude, longitude} = pos.coords;
+          const j = await (await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`)).json();
+          const name = j.city || j.locality || j.principalSubdivision || ""; if (!name) throw new Error("no name");
+          if (draft === my){ my.place = name; const i = $("#exp-place"); if (i) i.value = name; }
+          toast("📍 " + name);
+        } catch { toast("Couldn't find the place name. Type it instead."); }
+        done();
+      }, () => { toast("Location wasn't allowed. Type the place instead."); done(); }, {timeout:12000, maximumAge:600000});
+      return;
+    }
     if (act === "open-quick"){ syncExpDraft(); draft.view = "quick"; renderExpenseSheet(); const sh = $(".sheet"); if (sh) sh.scrollTop = 0; return; }
     if (act === "quick-back"){ draft.view = "main"; return renderExpenseSheet(); }
     if (act === "use-quick"){
@@ -1229,9 +1322,11 @@ document.addEventListener("click", async ev => {
       it.who = it.who.includes(id) ? it.who.filter(x => x !== id) : [...it.who, id]; $("#split-box").innerHTML = splitBox(); return; }
     if (act === "d-del"){
       if (!draft.confirmDel){ syncExpDraft(); draft.confirmDel = true; el.textContent = "Tap again"; setTimeout(() => { if (draft) draft.confirmDel = false; if (el.isConnected) el.textContent = "Delete"; }, 3000); return; }
-      const id = draft.id, prev = S.expenses.find(e => e.id === id); closeSheet();
-      write([delExpense(id)], "Deleted 🗑️",
-        [t.id, "delete", `deleted ${prev && prev.type === "settle" ? "a pay-back" : (prev && prev.desc) || "an expense"}${prev ? " · " + fmt(prev.amount, t.currency) : ""}`]);
+      const id = draft.id, prev = S.expenses.find(e => e.id === id); closeSheet(); if (!prev) return;
+      const {id:_x, ...body} = prev;
+      write([putExpense(id, {...body, deletedAt:Date.now(), deletedBy:me() || null})], "",
+        [t.id, "delete", `deleted ${prev.type === "settle" ? "a pay-back" : prev.desc || "an expense"} · ${fmt(prev.amount, t.currency)}`]);
+      toastAction("Moved to Recently deleted 🗑️", "Undo", () => restoreExpense(id));
       return;
     }
   }
@@ -1262,6 +1357,7 @@ document.addEventListener("input", ev => {
   if (el.id === "exp-desc") draft.desc = el.value;
   if (el.id === "exp-amount" || el.id === "exp-rate"){ draft[el.id === "exp-amount" ? "amount" : "rate"] = el.value; const c = $("#conv-line"); if (c) c.textContent = convLine(); refreshSplit(); }
   if (el.dataset.mi){ draft[el.dataset.mi][el.dataset.pid] = el.value; refreshSplit(); }
+  if (el.id === "exp-days"){ draft.days = Math.min(90, Math.max(1, parseInt(el.value, 10) || 1)); }
   if (el.dataset.itemName != null){ draft.items[+el.dataset.itemName].name = el.value; }
   if (el.dataset.itemAmt != null){ draft.items[+el.dataset.itemAmt].amount = el.value; refreshSplit(); }
 });
@@ -1270,6 +1366,14 @@ document.addEventListener("change", ev => {
   if (el.id === "f-cat" || el.id === "f-who" || el.id === "f-method"){
     S[{"f-cat":"fCat","f-who":"fWho","f-method":"fMethod"}[el.id]] = el.value; return render(); }
   if (el.id === "receipt-file"){ onReceiptFile(el.files && el.files[0]); return; }
+  if (el.id === "import-file"){ readImport(el.files && el.files[0]); el.value = ""; return; }
+  if (draft && draft.kind === "import"){
+    if (el.id === "imp-datefmt"){ draft.dateFmt = el.value; return renderImportSheet(); }
+    if (el.id === "imp-payer"){ draft.payer = el.value; return renderImportSheet(); }
+    if (el.id === "imp-split"){ draft.split = el.value; return renderImportSheet(); }
+    if (el.dataset.imap != null){ draft.map[el.dataset.imap] = el.value; return renderImportSheet(); }
+  }
+  if (el.id === "exp-payer" && draft && draft.mode === "personal"){ syncExpDraft(); return renderExpenseSheet(); }
   if (el.id === "exp-cur" && draft){ syncExpDraft(); draft.cur = el.value; draft.rate = String((t.rates||{})[draft.cur] ?? ""); draft.rateTyped = false; draft.rateSrc = ""; renderExpenseSheet(); autoRate(); }
 });
 function syncTripDraft(){ if (!draft) return; const n = $("#trip-name"), c = $("#trip-cur"), a = $("#trip-start"), b = $("#trip-end"); if (n) draft.name = n.value; if (c) draft.currency = c.value; if (a) draft.start = a.value; if (b) draft.end = b.value; }
@@ -1278,6 +1382,7 @@ function syncExpDraft(){ if (!draft || draft.kind !== "exp") return;
   if (g("exp-amount")) draft.amount = g("exp-amount").value; if (g("exp-desc")) draft.desc = g("exp-desc").value;
   if (g("exp-date")) draft.date = g("exp-date").value; if (g("exp-notes")) draft.notes = g("exp-notes").value; if (g("exp-rate")) draft.rate = g("exp-rate").value;
   if (g("exp-payer")) draft.payer = g("exp-payer").value; if (g("exp-method")) draft.method = g("exp-method").value;
+  if (g("exp-place")) draft.place = g("exp-place").value; if (g("exp-days")) draft.days = Math.min(90, Math.max(1, parseInt(g("exp-days").value, 10) || 1));
   document.querySelectorAll("[data-mi]").forEach(i => draft[i.dataset.mi][i.dataset.pid] = i.value);
   document.querySelectorAll("[data-item-name]").forEach(i => { const it = draft.items[+i.dataset.itemName]; if (it) it.name = i.value; });
   document.querySelectorAll("[data-item-amt]").forEach(i => { const it = draft.items[+i.dataset.itemAmt]; if (it) it.amount = i.value; }); }
@@ -1330,9 +1435,10 @@ document.addEventListener("submit", async ev => {
     const prev = S.expenses.find(e => e.id === d.id);
     const body = { type:d.type, amount:amountT, origAmount:amtE / fE, cur:d.cur, rate, desc:(d.desc||"").trim(), cat:d.cat, payer:d.payer, method:d.method,
       mode: settle ? "exact" : d.mode, inputs, shares, notes:(d.notes||"").trim(), receipt:d.receipt || null, date:d.date || today(),
+      place: settle ? "" : (d.place || "").trim(), days: settle ? 1 : (d.days || 1),
       createdAt:(prev && prev.createdAt) || Date.now(), createdBy:(prev ? prev.createdBy : me()) || null, updatedBy:me() || null, updatedAt:Date.now() };
     const isNew = !d.id, id = d.id || newId();
-    lsSet("ww-lastcur-" + t.id, foreign ? d.cur : "");
+    lsSet("ww-lastcur-" + t.id, foreign ? d.cur : ""); if (!settle) lsSet("ww-lastplace-" + t.id, (d.place || "").trim());
     closeSheet();
     const label = settle ? "a pay-back" : (body.desc || cat(body.cat).l);
     const money = fmt(amountT, t.currency) + (foreign ? ` (${fmt(body.origAmount, body.cur)})` : "");
@@ -1341,11 +1447,11 @@ document.addEventListener("submit", async ev => {
     else { const ch = diffText(t, prev, body); if (!ch.length){ toast("No changes"); return; } logText = `edited ${prev.desc || (settle ? "a pay-back" : cat(prev.cat).l)}: ${ch.join(", ")}`; }
     const ops = [putExpense(id, body)];
     if (foreign && String((t.rates||{})[d.cur]) !== String(rate)) ops.push(patchTrip({rates:{[d.cur]: rate}}));
-    const before = settle ? 0 : catSpent(S.expenses.filter(e => e.type !== "settle"), body.cat);
+    const before = settle ? 0 : catSpent(S.expenses.filter(isShared), body.cat);
     write(ops, settle && isNew ? "Settled up 🤝" : isNew ? CHEERS[Math.floor(Math.random()*CHEERS.length)] : "Updated ✏️", [t.id, settle && isNew ? "settle" : isNew ? "add" : "edit", logText]);
     if (isNew){ S.tab = settle ? S.tab : "expenses"; render(); confetti(); }
-    const budget = !settle && (trip().budgets||{})[body.cat];
-    if (budget){ const after = catSpent(S.expenses.filter(e => e.type !== "settle"), body.cat), c = cat(body.cat);
+    const budget = !settle && body.mode !== "personal" && (trip().budgets||{})[body.cat];
+    if (budget){ const after = catSpent(S.expenses.filter(isShared), body.cat), c = cat(body.cat);
       if (after > budget && before <= budget) setTimeout(() => toast(`Heads up: ${c.e} ${c.l} is over budget by ${fmt(after - budget, t.currency)} 😬`), 2500);
       else if (after >= budget * .8 && before < budget * .8) setTimeout(() => toast(`${c.e} ${c.l}: ${Math.round(after / budget * 100)}% of budget used`), 2500); }
     return;
@@ -1366,6 +1472,119 @@ document.addEventListener("submit", async ev => {
     write([patchTrip({budgets})], "Budgets saved 🎯", [t.id, "trip", "updated the category budgets"]); return; }
 });
 
+/* ---------- import from a spreadsheet (CSV) ---------- */
+function parseCSV(text){
+  text = text.replace(/^\uFEFF/, "");
+  const first = text.split(/\r?\n/)[0] || "", delim = [",", ";", "\t"].sort((a, b) => first.split(b).length - first.split(a).length)[0];
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if (q){ if (ch === '"'){ if (text[i+1] === '"'){ cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === delim){ row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r"){ if (ch === "\r" && text[i+1] === "\n") i++; row.push(cell); cell = ""; if (row.some(c => c.trim())) rows.push(row); row = []; }
+    else cell += ch;
+  }
+  row.push(cell); if (row.some(c => c.trim())) rows.push(row);
+  return rows;
+}
+function guessCol(head, re, not){ return head.findIndex(h => re.test(h) && !(not && not.test(h))); }
+async function readImport(file){
+  if (!file) return;
+  if (file.size > 3e6) return toast("That file is too big (3 MB max).");
+  const rows = parseCSV(await file.text()); if (rows.length < 2) return toast("No rows found. Is it a CSV file with a header row?");
+  const head = rows[0].map(h => h.trim()), lc = head.map(h => h.toLowerCase());
+  const own = lc.findIndex(h => /^amount \([a-z]{3}\)$/.test(h));
+  const map = {
+    date: guessCol(lc, /date|time/), desc: guessCol(lc, /desc|name|merchant|item|detail|payee|narrative|what/),
+    amount: own >= 0 ? own : guessCol(lc, /amount|total|price|cost|debit|value|spent/, /original|share/),
+    cur: own >= 0 ? -1 : guessCol(lc, /^currency$|^cur$|ccy/), payer: guessCol(lc, /paid by|payer|who paid|^who$/),
+    cat: guessCol(lc, /categ/), method: guessCol(lc, /method|payment|card|account/), notes: guessCol(lc, /note|memo|comment/),
+    place: guessCol(lc, /place|location|city/), type: guessCol(lc, /^type$/),
+  };
+  for (const k in map) map[k] = String(map[k]);
+  draft = { kind:"import", name:file.name, head, rows:rows.slice(1, 1001), map, fixedCur: own >= 0 ? head[own].match(/\(([A-Za-z]{3})\)/)[1].toUpperCase() : "",
+    dateFmt:"auto", payer:me() || ((trip().people||[])[0] || {}).id, split:"equal" };
+  renderImportSheet();
+}
+const CAT_WORDS = [["stay",/hotel|hostel|airbnb|resort|\binn\b|lodge|booking\.com|agoda/],["transport",/grab|uber|taxi|bus|train|mrt|lrt|flight|airline|air ?asia|fuel|petrol|parking|toll|ferry|gojek|bolt/],
+  ["groceries",/mart|market|grocer|7-?eleven|seven ?eleven|supermarket|family ?mart|lotus|tesco|aeon|big c/],["drinks",/\bbar\b|pub|beer|wine|drink|starbucks|coffee|cafe|kopi|boba|tea/],
+  ["food",/restaurant|food|meal|lunch|dinner|breakfast|kfc|mcdonald|burger|pizza|noodle|rice|sushi|eat/],["fun",/ticket|tour|museum|park|cinema|show|spa|klook/],["shopping",/shop|store|mall|amazon|lazada|shopee|uniqlo/]];
+function guessCat(v, desc){
+  const s = String(v || "").toLowerCase().trim(); const c = CATS.find(x => x.k === s || x.l.toLowerCase() === s); if (c) return c.k;
+  const t = (s + " " + String(desc || "")).toLowerCase(); for (const [k, re] of CAT_WORDS) if (re.test(t)) return k; return "other";
+}
+function parseImportDate(v, fmtPref){
+  const s = String(v || "").trim(); let m;
+  if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/))) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/))){
+    let [_, a, b, y] = m; if (y.length === 2) y = "20" + y;
+    const dmy = fmtPref === "dmy" || (fmtPref === "auto" && +a > 12) || (fmtPref === "auto" && +b <= 12);
+    const [dd, mm] = dmy ? [a, b] : [b, a]; if (+mm > 12 || +dd > 31) return "";
+    return `${y}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`;
+  }
+  const d = new Date(s); return isNaN(d) ? "" : iso(d);
+}
+function parseImportAmount(v){
+  let s = String(v || "").replace(/[^\d.,\-]/g, ""); if (!s) return 0;
+  const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+  if (lc > ld) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/,/g, "");
+  const n = Math.abs(parseFloat(s)); return isFinite(n) ? n : 0;
+}
+function importRows(){
+  const t = trip(), d = draft, col = k => +d.map[k], get = (r, k) => col(k) >= 0 ? (r[col(k)] || "").trim() : "";
+  const out = []; let skipped = 0;
+  for (const r of d.rows){
+    if (/pay-?back|settle/i.test(get(r, "type"))){ skipped++; continue; }
+    const amount = parseImportAmount(get(r, "amount")); if (!amount){ skipped++; continue; }
+    const desc = get(r, "desc").slice(0, 60), payerName = get(r, "payer").toLowerCase();
+    const payer = ((t.people||[]).find(p => p.name.toLowerCase() === payerName) || {}).id || d.payer;
+    const curRaw = (d.fixedCur || get(r, "cur")).toUpperCase(), cur = validCur(curRaw) ? curRaw : t.currency;
+    out.push({ desc, amount, cur, payer, date: parseImportDate(get(r, "date"), d.dateFmt) || today(), cat: guessCat(get(r, "cat"), desc),
+      method: get(r, "method").slice(0, 30), notes: get(r, "notes").slice(0, 500), place: get(r, "place").slice(0, 40) });
+  }
+  return {out, skipped};
+}
+function renderImportSheet(){
+  const t = trip(), d = draft, {out, skipped} = importRows();
+  const sel = (k, label) => `<label class="mini"><span class="label">${label}</span><select class="input" data-imap="${k}"><option value="-1">—</option>${d.head.map((h, i) => `<option value="${i}" ${+d.map[k] === i ? "selected" : ""}>${esc(h || "Column " + (i + 1))}</option>`).join("")}</select></label>`;
+  openSheet(`<div class="xs-head"><h2 class="grow">Import 📥</h2><button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button></div>
+    <p class="note muted" style="margin-top:0">${esc(d.name)} · ${d.rows.length} row${d.rows.length === 1 ? "" : "s"}. Match the columns, check the preview, then import.</p>
+    <div class="grid2">${sel("date","Date")}${sel("desc","Description")}${sel("amount","Amount")}${d.fixedCur ? `<div class="mini"><span class="label">Currency</span><div class="input">${esc(d.fixedCur)}</div></div>` : sel("cur","Currency")}
+      ${sel("payer","Paid by")}${sel("cat","Category")}${sel("method","Payment method")}${sel("place","Place")}</div>
+    <div class="grid2" style="margin-top:8px">
+      <label class="mini"><span class="label">Date format</span><select class="input" data-imap="_dateFmt" id="imp-datefmt">${[["auto","Automatic"],["dmy","Day/Month/Year"],["mdy","Month/Day/Year"]].map(([v, l]) => `<option value="${v}" ${d.dateFmt === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="mini"><span class="label">If no payer column</span><select class="input" id="imp-payer">${(t.people||[]).map(p => `<option value="${esc(p.id)}" ${d.payer === p.id ? "selected" : ""}>${esc(p.name)} paid</option>`).join("")}</select></label>
+      <label class="mini" style="grid-column:1/-1"><span class="label">Split</span><select class="input" id="imp-split"><option value="equal" ${d.split === "equal" ? "selected" : ""}>Everyone equally</option><option value="personal" ${d.split === "personal" ? "selected" : ""}>Personal (only the payer)</option></select></label>
+    </div>
+    <div class="label" style="margin:14px 0 6px">Preview</div>
+    <div class="stack" style="gap:6px">${out.slice(0, 4).map(x => `<div class="qbtn" style="cursor:default"><span class="cat sm">${cat(x.cat).e}</span><span class="grow" style="min-width:0"><b>${esc(x.desc || cat(x.cat).l)}</b><span class="note muted" style="display:block">${esc(niceDate(x.date))} · ${esc(person(t, x.payer).name)} paid${x.place ? " · 📍 " + esc(x.place) : ""}</span></span><b class="num">${fmt(x.amount, x.cur)}</b></div>`).join("") || `<p class="muted">No usable rows yet. Pick the Amount column.</p>`}</div>
+    <div class="sheet-foot"><p class="note muted" style="margin:0">${out.length} expense${out.length === 1 ? "" : "s"} ready${skipped ? ` · ${skipped} row${skipped === 1 ? "" : "s"} skipped (no amount, or a pay-back)` : ""}. Foreign currencies use today's rate.</p>
+      <button type="button" class="btn primary block" data-act="do-import" ${out.length ? "" : "disabled"}>Import ${out.length} expense${out.length === 1 ? "" : "s"}</button></div>`);
+}
+async function runImport(){
+  const t = trip(), d = draft; if (!t || !d || d.kind !== "import") return;
+  const {out} = importRows(); if (!out.length) return;
+  const rates = {...(t.rates || {})}, newRates = {};
+  for (const cur of [...new Set(out.map(x => x.cur))].filter(c => c !== t.currency && !rates[c])){
+    const r = await liveRate(cur, t.currency); if (r){ rates[cur] = +r.rate.toPrecision(6); newRates[cur] = rates[cur]; } }
+  const ids = (t.people||[]).map(p => p.id), fT = 10 ** decimals(t.currency), ops = []; let missing = 0, n = 0;
+  out.forEach((x, i) => {
+    const rate = x.cur === t.currency ? 1 : rates[x.cur]; if (!rate){ missing++; return; }
+    const totalT = Math.round(x.amount * rate * fT), w = {};
+    if (d.split === "personal") w[x.payer] = 1; else ids.forEach(id => w[id] = 1);
+    const shares = {}; for (const [id, v] of Object.entries(allocate(totalT, w))) shares[id] = v / fT;
+    ops.push(putExpense(newId(), { type:"exp", amount:totalT / fT, origAmount:x.amount, cur:x.cur, rate, desc:x.desc, cat:x.cat, payer:x.payer, method:x.method,
+      mode: d.split === "personal" ? "personal" : "equal", inputs: d.split === "personal" ? {} : {among:ids}, shares, notes:x.notes, place:x.place, days:1, receipt:null,
+      date:x.date, createdAt:Date.now() - (out.length - i), createdBy:me() || null, imported:true }));
+    n++;
+  });
+  if (Object.keys(newRates).length) ops.push(patchTrip({rates:newRates}));
+  closeSheet(); S.tab = "expenses";
+  write(ops, `Imported ${n} expense${n === 1 ? "" : "s"} 📥`, [t.id, "add", `imported ${n} expense${n === 1 ? "" : "s"} from a spreadsheet`]);
+  if (missing) setTimeout(() => toast(`${missing} row${missing === 1 ? "" : "s"} skipped: no exchange rate available offline.`), 2600);
+}
+
 /* ---------- shareable summary image ---------- */
 async function shareSummary(){
   const t = trip(); if (!t) return;
@@ -1376,7 +1595,7 @@ async function shareSummary(){
   x.fillStyle = "#FFC83D"; x.beginPath(); x.arc(W - 60, 80, 190, 0, Math.PI * 2); x.fill();
   const rr = (X, Y, w, h, r, fill) => { x.beginPath(); x.roundRect ? x.roundRect(X, Y, w, h, r) : x.rect(X, Y, w, h); x.fillStyle = fill; x.fill(); };
   const fit = (txt, font, size, maxW) => { let s = size; do { x.font = `800 ${s}px ${font}`; s -= 2; } while (x.measureText(txt).width > maxW && s > 24); };
-  const exps = S.expenses, real = exps.filter(e => e.type !== "settle"), total = real.reduce((a, e) => a + e.amount, 0);
+  const exps = S.expenses, real = exps.filter(isShared), total = real.reduce((a, e) => a + e.amount, 0);
   const {net, f} = balances(t, exps), plan = settlePlan(net);
   try { const img = new Image(); img.src = "icon.svg"; await img.decode(); x.drawImage(img, 70, 70, 84, 84); } catch {}
   x.fillStyle = "#EEF1FA"; x.font = `700 34px ${B}`; x.fillText("Wander Wallet", 172, 126);
