@@ -241,6 +241,32 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .linkish{border:0;background:none;padding:0;color:var(--accent);font-weight:700;text-decoration:underline;cursor:pointer;font-size:inherit}
 :root:not([data-theme="light"]) .linkish{color:#9AA5FF}
 .update-bar{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));z-index:85;display:flex;align-items:center;gap:10px;background:var(--surface);color:var(--ink);padding:8px 8px 8px 16px;border-radius:999px;box-shadow:var(--shadow);font-weight:700;font-size:14px;max-width:calc(100% - 32px)}
+.desk-only{display:none}
+.trip-grid{display:flex;flex-direction:column;gap:12px}
+@media (hover:hover){ .exp:hover,.pass:hover,.qbtn:hover{filter:brightness(1.06)} .btn:hover{filter:brightness(1.08)} }
+@media (min-width:720px){
+  .wrap{max-width:720px}
+  .trip-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .trip-grid > .empty{grid-column:1/-1}
+  /* bottom sheets become centred windows */
+  .scrim{align-items:center;padding:24px}
+  .sheet{border-radius:24px;max-height:min(88vh,900px);box-shadow:0 30px 80px -20px rgba(0,0,0,.6)}
+  .sheet .grab{display:none}
+  .catrow{flex-wrap:wrap;overflow:visible}
+  .sheet-foot{bottom:-12px}
+}
+@media (min-width:1000px){
+  .wrap{max-width:1160px;padding-block:32px 60px}
+  .trip-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .trip-layout{display:grid;grid-template-columns:360px minmax(0,1fr);gap:28px;align-items:start}
+  .trip-side{position:sticky;top:24px;display:flex;flex-direction:column;gap:16px}
+  .trip-main .tabs{margin-top:0}
+  .desk-only{display:block}
+  .fab{left:auto;right:max(32px,calc((100vw - 1160px)/2));transform:none;bottom:32px}
+  .fab:active{transform:scale(.95)}
+  .brand h1{font-size:36px}
+  .tag{max-width:60ch}
+}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -265,7 +291,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.12-a"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.12-b"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -569,7 +595,7 @@ function homeView(){
   return `
     <div class="brand"><div class="logo" aria-hidden="true"><img src="icon.svg" alt=""></div><h1 class="grow">Wander Wallet</h1>${themeBtn()}</div>
     <p class="tag muted">The shared money pot for your adventures. Log it, split it, forget the awkward maths. No sign-up needed.</p>
-    <div class="stack">${cards}${archived}
+    <div class="stack"><div class="trip-grid">${cards}</div>${archived}
       <form class="card stack" style="gap:8px" data-form="join">
         <label class="label" for="join-link">Open a trip link</label>
         <p class="muted" style="margin:0;font-size:13px">Added this app to your Home Screen? It keeps its own list, so paste a trip link once to bring the trip in.</p>
@@ -612,6 +638,7 @@ function tripView(){
     </div>
     ${S.offline ? `<div class="banner">📴 Offline. Showing what's saved on this phone.${S.pending ? ` ${S.pending} change${S.pending===1?"":"s"} will sync when you're back online.` : " New changes will sync later."}</div>` : S.pending ? `<div class="banner">⏳ Syncing ${S.pending} change${S.pending===1?"":"s"}…</div>` : ""}
     ${isArchived(t.id) ? `<div class="banner row"><span class="grow">📦 Archived on this phone.</span><button class="btn sm" data-act="archive" data-v="0">Unarchive</button></div>` : ""}
+    <div class="trip-layout"><aside class="trip-side">
     <section class="hero">
       <span class="emoji" aria-hidden="true">${esc(t.emoji||"✈️")}</span>
       <div class="sub">Total trip spend</div>
@@ -622,9 +649,20 @@ function tripView(){
       </div>
       ${myLine || `<div class="mybal" style="font-weight:500;font-size:14px;opacity:.85">Tap your name so we can show your balance.</div>`}
     </section>
+    ${S.tab !== "balances" ? sideBalances(t, net, f) : ""}
+    </aside><section class="trip-main">
     <nav class="tabs">${tabs.map(([k,l]) => `<button class="${S.tab===k?"on":""}" data-act="tab" data-tab="${k}">${l}</button>`).join("")}</nav>
     ${body}
-    <button class="btn primary fab" data-act="add">＋ Add expense</button>`;
+    </section></div>
+    <button class="btn primary fab" data-act="add" title="Add expense (N)">＋ Add expense</button>`;
+}
+// Desktop only: a compact "who owes what" panel beside the main column.
+function sideBalances(t, net, f){
+  const plan = settlePlan(net);
+  return `<div class="card desk-only"><div class="label" style="margin-bottom:6px">Balances</div>
+    ${(t.people||[]).map(p => { const v = net[p.id]||0; return `<div class="row" style="padding:5px 0">${face(p)}<b class="grow">${esc(p.name)}</b><span class="num ${v>0?"pos":v<0?"neg":"muted"}" style="font-weight:700">${v>0?"+":v<0?"−":""}${v?fmt(Math.abs(v)/f, t.currency):"square"}</span></div>`; }).join("")}
+    ${plan.length ? `<div class="note muted" style="margin-top:8px">${plan.map(x => `${esc(person(t, x.from).name)} → ${esc(person(t, x.to).name)} ${fmt(x.v/f, t.currency)}`).join("<br>")}</div>` : ""}
+    <button class="btn sm ghost block" style="margin-top:10px" data-act="tab" data-tab="balances">Settle up</button></div>`;
 }
 function tripDayLabel(t){
   if (!t.start) return "";
@@ -1205,6 +1243,8 @@ document.addEventListener("click", async ev => {
 document.addEventListener("keydown", ev => {
   if (ev.key === "Escape"){ if ($("#lightbox-root").innerHTML) $("#lightbox-root").innerHTML = ""; else if (draft) closeSheet(); }
   if (ev.key === "Enter" && ev.target.id === "person-name"){ ev.preventDefault(); addDraftPerson(); }
+  const typing = /INPUT|TEXTAREA|SELECT/.test((ev.target.tagName || "")) || ev.target.isContentEditable;
+  if (!typing && !draft && !ev.metaKey && !ev.ctrlKey && !ev.altKey && (ev.key === "n" || ev.key === "N") && S.trip){ ev.preventDefault(); expenseSheet(null); }
 });
 document.addEventListener("input", ev => {
   const el = ev.target;
