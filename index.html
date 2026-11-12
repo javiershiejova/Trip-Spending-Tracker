@@ -255,17 +255,25 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
   .catrow{flex-wrap:wrap;overflow:visible}
   .sheet-foot{bottom:-12px}
 }
-@media (min-width:1000px){
-  .wrap{max-width:1160px;padding-block:32px 60px}
-  .trip-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .trip-layout{display:grid;grid-template-columns:360px minmax(0,1fr);gap:28px;align-items:start}
-  .trip-side{position:sticky;top:24px;display:flex;flex-direction:column;gap:16px}
+/* iPad portrait and up: balances panel beside the list */
+@media (min-width:800px){
+  .wrap{max-width:1160px;padding-block:28px 60px}
+  .trip-layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
+  .trip-side{position:sticky;top:calc(20px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:16px}
   .trip-main .tabs{margin-top:0}
   .desk-only{display:block}
-  .fab{left:auto;right:max(32px,calc((100vw - 1160px)/2));transform:none;bottom:32px}
+  .trip-side .hero::before{width:100px;height:100px;right:-34px;top:-34px}
+  .trip-side .hero .emoji{font-size:32px;right:12px;top:8px}
+  .fab{left:auto;right:max(28px,calc((100vw - 1160px)/2));transform:none;bottom:calc(28px + env(safe-area-inset-bottom,0px))}
   .fab:active{transform:scale(.95)}
-  .brand h1{font-size:36px}
   .tag{max-width:60ch}
+}
+/* iPad landscape and computers */
+@media (min-width:1000px){
+  .wrap{padding-block:32px 60px}
+  .trip-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .trip-layout{grid-template-columns:360px minmax(0,1fr);gap:28px}
+  .brand h1{font-size:36px}
 }
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
@@ -291,7 +299,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.12-b"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.12-c"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
