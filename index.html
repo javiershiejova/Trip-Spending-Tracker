@@ -240,6 +240,7 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .xs-head .icon-btn{flex:none}
 .linkish{border:0;background:none;padding:0;color:var(--accent);font-weight:700;text-decoration:underline;cursor:pointer;font-size:inherit}
 :root:not([data-theme="light"]) .linkish{color:#9AA5FF}
+.update-bar{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));z-index:85;display:flex;align-items:center;gap:10px;background:var(--surface);color:var(--ink);padding:8px 8px 8px 16px;border-radius:999px;box-shadow:var(--shadow);font-weight:700;font-size:14px;max-width:calc(100% - 32px)}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -264,7 +265,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.09-b";
+const APP_VERSION = "2026.11.12-a"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -1116,11 +1117,7 @@ document.addEventListener("click", async ev => {
   if (act === "theme" || act === "theme-set"){ const th = act === "theme-set" ? el.dataset.v : (document.documentElement.dataset.theme === "light" ? "dark" : "light"); lsSet("ww-theme", th); applyTheme(th); return render(); }
   if (act === "archive"){ const on = el.dataset.v === "1"; setArchived(t.id, on); toast(on ? "Archived 📦 Find it under Archived trips." : "Back in your trips 📤"); if (on) return go(null); return render(); }
   if (act === "summary") return shareSummary();
-  if (act === "force-update"){
-    toast("Getting the latest version…");
-    try { const regs = navigator.serviceWorker ? await navigator.serviceWorker.getRegistrations() : []; for (const r of regs) await r.update().catch(() => {});
-      if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch {}
-    location.replace(location.pathname + "?v=" + Date.now() + location.hash); return; }
+  if (act === "force-update"){ toast("Getting the latest version…"); return applyUpdate(); }
   if (act === "summary-share" && draft && draft.kind === "summary"){ try { await navigator.share({files:[draft.file], title:"Trip summary"}); } catch {} return; }
   if (act === "paste-link"){ try { const txt = await navigator.clipboard.readText(); const i = $("#join-link"); if (i) i.value = txt.trim(); } catch { toast("Tap and hold the box, then choose Paste."); } return; }
   if (act === "add") return expenseSheet(null);
@@ -1385,6 +1382,36 @@ function confetti(){
     ps.forEach(p => { p.vy += .45; p.x += p.vx; p.y += p.vy; p.a += p.s; x.save(); x.translate(p.x,p.y); x.rotate(p.a); x.fillStyle = p.c; x.fillRect(-p.r/2,-p.r/4,p.r,p.r/2); x.restore(); });
     if (++n < 90) requestAnimationFrame(tick); else { x.clearRect(0,0,W,H); c.hidden = true; } })();
 }
+
+/* ---------- automatic updates ---------- */
+// Phones (including Home Screen apps) check the live copy whenever the app opens or comes back to the front.
+// If it has a newer APP_VERSION, the app reloads into it, once unsaved work is out of the way.
+async function applyUpdate(){
+  try { const regs = navigator.serviceWorker ? await navigator.serviceWorker.getRegistrations() : []; for (const r of regs) await r.update().catch(() => {});
+    if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch {}
+  location.replace(location.pathname + "?v=" + Date.now() + location.hash);
+}
+let updateReady = "", lastCheck = 0;
+async function checkForUpdate(){
+  if (navigator.onLine === false || Date.now() - lastCheck < 60000) return; lastCheck = Date.now();
+  try {
+    const html = await (await fetch("index.html?check=" + Date.now(), {cache:"no-store"})).text();
+    const m = html.match(/const APP_VERSION = "([^"]+)"/); if (!m || m[1] === APP_VERSION) return;
+    const tried = sessionStorage.getItem("ww-update-tried");
+    if (tried === m[1]) return showUpdateBar(m[1]);           // already reloaded once for this version: don't loop
+    if (draft || queue().length) return showUpdateBar(m[1]);   // a form is open or changes are still syncing
+    sessionStorage.setItem("ww-update-tried", m[1]); applyUpdate();
+  } catch {}
+}
+function showUpdateBar(v){
+  if (updateReady === v) return; updateReady = v;
+  const bar = document.createElement("div"); bar.className = "update-bar";
+  bar.innerHTML = `<span>✨ A new version is ready</span><button class="btn sm sun" data-act="force-update">Update</button>`;
+  document.body.appendChild(bar);
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+setInterval(checkForUpdate, 30 * 60000);
+setTimeout(checkForUpdate, 3000);
 
 readHash(); render(); flush();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
