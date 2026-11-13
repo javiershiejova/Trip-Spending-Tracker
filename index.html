@@ -290,7 +290,7 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .hero.has-photo .me-chip{background:rgba(0,0,0,.35);text-shadow:none}
 .hero.has-photo .me-chip.on{background:var(--sun)}
 .hero .credit{position:absolute;right:12px;bottom:7px;font-size:10px;color:#fff;opacity:.85;text-decoration:none;max-width:70%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:1}
-.cover-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cover-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-height:330px;overflow-y:auto;padding:2px}
 .cover-opt{aspect-ratio:4/3;border-radius:10px;border:3px solid transparent;background-size:cover;background-position:center;background-color:var(--chip);padding:0;cursor:pointer}
 .cover-opt.on{border-color:var(--sun);transform:scale(.96)}
 .pass .stub.photo::after{display:none}
@@ -329,9 +329,9 @@ const AVATARS = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁",
   "💎","🔥","⚡","🎯","🎲","🧩","🍕","🍔","🌮","🍣","🍓","🍑","🥑","🌶️","🧁","🍭","🌸","🌵","🍄","🪐","🌙","⭐","❤️","🧡","💛","💚","💙","💜"];
 const TRIP_COLORS = ["#3F4FF0","#7A45D6","#C93576","#D9483B","#C2620F","#A87A00","#23864A","#0B8577","#1A73C7","#3F4C6B"];
 const tripColor = t => /^#[0-9a-f]{6}$/i.test((t && t.color) || "") ? t.color : "#3F4FF0";
-// Cover photos: only Wikimedia Commons or this app's own photo storage are allowed.
+// Cover photos: https images only, with every character that could break out of CSS url('...') encoded.
 function safeImg(u){
-  if (typeof u !== "string" || !(/^https:\/\/upload\.wikimedia\.org\//.test(u) || u.startsWith(SUPABASE_URL + "/storage/"))) return "";
+  if (typeof u !== "string" || !/^https:\/\/[^\s]+$/i.test(u) || u.length > 2000) return "";
   return u.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\\/g, "%5C").replace(/[\n\r()]/g, m => encodeURIComponent(m));
 }
 function coverOn(t){ return !!(t && t.coverOn && t.cover && safeImg(t.cover.url)); }
@@ -341,10 +341,28 @@ function heroStyle(t, cover, on){
 }
 function heroCredit(cover, on){
   if (!on || !cover || !cover.credit) return "";
-  const link = /^https:\/\/commons\.wikimedia\.org\//.test(cover.link || "") ? cover.link : "";
+  const link = /^https:\/\/[^\s"'<>]+$/i.test(cover.link || "") ? cover.link : "";
   return link ? `<a class="credit" href="${esc(link)}" target="_blank" rel="noopener">📷 ${esc(cover.credit)}</a>` : `<span class="credit">📷 ${esc(cover.credit)}</span>`;
 }
+async function findOpenverse(q){
+  const u = "https://api.openverse.org/v1/images/?" + new URLSearchParams({q, page_size:"30", aspect_ratio:"wide", size:"large", category:"photograph", mature:"false"});
+  const j = await (await fetch(u)).json();
+  const lic = r => { const l = String(r.license || "").toLowerCase(); return l === "pdm" ? "Public domain" : l === "cc0" ? "CC0" : l ? `CC ${l.toUpperCase()} ${r.license_version || ""}`.trim() : ""; };
+  return (j.results || []).map(r => {
+    const url = String(r.url || "").replace(/^http:\/\//i, "https://"); if (!safeImg(url) || (r.width && r.width < 1000)) return null;
+    return {type:"openverse", url, thumb:safeImg(r.thumbnail) ? r.thumbnail : url,
+      credit:[String(r.creator || "Unknown").replace(/\s+/g, " ").trim().slice(0, 40), lic(r), String(r.source || r.provider || "").replace(/^\w/, c => c.toUpperCase())].filter(Boolean).join(" · "),
+      link:String(r.foreign_landing_url || ""), q};
+  }).filter(Boolean);
+}
 async function findPhotos(q){
+  const [ov, wm] = await Promise.allSettled([findOpenverse(q), findCommons(q)]);
+  if (ov.status === "rejected" && wm.status === "rejected") throw new Error("no sources");
+  const seen = new Set(), out = [];
+  for (const r of [...(ov.value || []).slice(0, 18), ...(wm.value || []).slice(0, 12)]){ if (seen.has(r.url)) continue; seen.add(r.url); out.push(r); }
+  return out.slice(0, 27);
+}
+async function findCommons(q){
   const u = "https://commons.wikimedia.org/w/api.php?" + new URLSearchParams({action:"query", format:"json", origin:"*", generator:"search", gsrnamespace:"6", gsrlimit:"40",
     gsrsearch:`${q} filetype:bitmap -map -logo -flag -diagram -coat -plan -chart`, prop:"imageinfo", iiprop:"url|size|mime|extmetadata", iiurlwidth:"1280", iiextmetadatafilter:"Artist|LicenseShortName"});
   const j = await (await fetch(u)).json();
@@ -372,7 +390,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"],["personal","🔒 Me"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.13-b"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.13-c"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -1041,7 +1059,7 @@ function renderLookSheet(){
       <form class="row" data-form="cover-search"><input class="input grow" id="look-q" placeholder="Place, e.g. Kyoto or Mount Fuji" value="${esc(d.q)}" autocomplete="off"><button class="btn">Find</button></form>
       ${d.status ? `<p class="note muted" style="margin:0">${esc(d.status)}</p>` : ""}
       ${d.results.length ? `<div class="cover-grid">${d.results.map((r, i) => `<button type="button" class="cover-opt ${d.cover && d.cover.url === r.url ? "on" : ""}" data-act="look-pick" data-i="${i}" aria-label="Use this photo" style="background-image:url('${safeImg(r.thumb)}')"></button>`).join("")}</div>
-        <p class="note muted" style="margin:0">Free photos from Wikimedia Commons. The photographer is credited on the card.</p>` : ""}
+        <p class="note muted" style="margin:0">Free photos from Openverse (Flickr and more) and Wikimedia Commons. The photographer is credited on the card.</p>` : ""}
       <label class="btn ghost block file-btn">📷 Upload my own photo<input type="file" id="cover-file" accept="image/*"></label>
     </div>` : ""}
     <div class="label" style="margin:14px 0 6px">Colour${d.bg === "photo" ? " (shown while the photo loads, and on the summary picture)" : ""}</div>${colorSwatches(d.color, "look-color")}

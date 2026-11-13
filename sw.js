@@ -1,6 +1,6 @@
 // Wander Wallet offline support: keeps a copy of the app so it opens without signal.
 // Trip data itself is saved on the phone by the app; this file only caches the app's own files.
-const CACHE = "ww-app-v4";
+const CACHE = "ww-app-v5";
 const CORE = [
   "./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
@@ -18,7 +18,7 @@ self.addEventListener("fetch", e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== "GET") return;
   // Never cache live data: the database and exchange rates.
-  if (url.hostname.endsWith("supabase.co") || url.hostname === "open.er-api.com") return;
+  if (url.hostname.endsWith("supabase.co") || url.hostname === "open.er-api.com" || url.hostname.includes("api.openverse") || url.hostname === "commons.wikimedia.org") return;
   const isPage = req.mode === "navigate" || (url.origin === location.origin && url.pathname.endsWith(".html"));
   if (isPage){
     // Newest app when online, saved copy when offline.
@@ -26,7 +26,7 @@ self.addEventListener("fetch", e => {
       .catch(() => caches.match("./index.html").then(r => r || caches.match("./"))));
     return;
   }
-  const cacheable = url.origin === location.origin || url.hostname === "cdn.jsdelivr.net" || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com") || url.hostname === "upload.wikimedia.org";
+  const cacheable = url.origin === location.origin || url.hostname === "cdn.jsdelivr.net" || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com") || req.destination === "image";
   if (!cacheable) return;
   // Saved copy first, refreshed in the background.
   e.respondWith(caches.match(req).then(hit => {
