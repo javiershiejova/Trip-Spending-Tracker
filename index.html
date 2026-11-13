@@ -298,6 +298,9 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .cover-opt.busy::after{content:"⏳";position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.45);font-size:20px}
 .pass .stub.photo::after{display:none}
 .stub.photo,.look-preview{position:relative}
+.pass.has-photo{color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+.pass.has-photo .muted{color:rgba(255,255,255,.85)}
+.pass.has-photo .stub::after{display:none}
 .photo-badge{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:26px;background:rgba(0,0,0,.35);box-shadow:0 2px 10px rgba(0,0,0,.35);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .photo-badge.sm{width:30px;height:30px;font-size:17px;position:absolute;right:-6px;bottom:-6px;background:var(--surface)}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
@@ -339,6 +342,12 @@ const tripColor = t => /^#[0-9a-f]{6}$/i.test((t && t.color) || "") ? t.color : 
 function safeImg(u){
   if (typeof u !== "string" || !/^https:\/\/[^\s]+$/i.test(u) || u.length > 2000) return "";
   return u.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\\/g, "%5C").replace(/[\n\r()]/g, m => encodeURIComponent(m));
+}
+// Home-screen trip card: the trip's photo across the whole card (darkened for readable text), or a soft wash of the trip colour.
+function passStyle(t){
+  const u = safeImg(t.thumb), c = tripColor(t);
+  return u ? `background:linear-gradient(90deg,rgba(8,12,26,.05),rgba(8,12,26,.5) 45%,rgba(8,12,26,.68)),url('${u}') center/cover no-repeat ${c}`
+           : `background:linear-gradient(115deg,${c}40,${c}14 45%,transparent 75%),var(--surface)`;
 }
 function coverOn(t){ return !!(t && t.coverOn && t.cover && safeImg(t.cover.url)); }
 function heroStyle(t, cover, on){
@@ -410,7 +419,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"],["personal","🔒 Me"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.13-e"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.13-f"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -720,15 +729,15 @@ function setupView(){
 function homeView(){
   const all = myTrips(), list = all.filter(t => !t.archived), arch = all.filter(t => t.archived);
   const card = t => `
-    <button class="pass" data-act="open" data-id="${esc(t.id)}">
-      <span class="stub ${safeImg(t.thumb) ? "photo" : ""}" style="${safeImg(t.thumb) ? `background:url('${safeImg(t.thumb)}') center/cover ${tripColor(t)}` : `background:${tripColor(t)}`}">${safeImg(t.thumb) ? `<span class="photo-badge">${esc(t.emoji||"✈️")}</span>` : esc(t.emoji||"✈️")}</span>
+    <button class="pass ${safeImg(t.thumb) ? "has-photo" : ""}" data-act="open" data-id="${esc(t.id)}" style="${passStyle(t)}">
+      <span class="stub ${safeImg(t.thumb) ? "photo" : ""}" style="${safeImg(t.thumb) ? "background:transparent" : `background:${tripColor(t)}`}">${safeImg(t.thumb) ? `<span class="photo-badge">${esc(t.emoji||"✈️")}</span>` : esc(t.emoji||"✈️")}</span>
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
     </button>`;
   const archived = arch.length ? `<details class="arch"><summary>📦 Archived trips (${arch.length})</summary><div class="stack" style="margin-top:10px">${arch.map(card).join("")}</div></details>` : "";
   const cards = list.length ? list.map(t => `
-    <button class="pass" data-act="open" data-id="${esc(t.id)}">
-      <span class="stub ${safeImg(t.thumb) ? "photo" : ""}" style="${safeImg(t.thumb) ? `background:url('${safeImg(t.thumb)}') center/cover ${tripColor(t)}` : `background:${tripColor(t)}`}">${safeImg(t.thumb) ? `<span class="photo-badge">${esc(t.emoji||"✈️")}</span>` : esc(t.emoji||"✈️")}</span>
+    <button class="pass ${safeImg(t.thumb) ? "has-photo" : ""}" data-act="open" data-id="${esc(t.id)}" style="${passStyle(t)}">
+      <span class="stub ${safeImg(t.thumb) ? "photo" : ""}" style="${safeImg(t.thumb) ? "background:transparent" : `background:${tripColor(t)}`}">${safeImg(t.thumb) ? `<span class="photo-badge">${esc(t.emoji||"✈️")}</span>` : esc(t.emoji||"✈️")}</span>
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
     </button>`).join("")
