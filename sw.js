@@ -1,6 +1,6 @@
 // Wander Wallet offline support: keeps a copy of the app so it opens without signal.
 // Trip data itself is saved on the phone by the app; this file only caches the app's own files.
-const CACHE = "ww-app-v3";
+const CACHE = "ww-app-v4";
 const CORE = [
   "./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
@@ -26,7 +26,7 @@ self.addEventListener("fetch", e => {
       .catch(() => caches.match("./index.html").then(r => r || caches.match("./"))));
     return;
   }
-  const cacheable = url.origin === location.origin || url.hostname === "cdn.jsdelivr.net" || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com");
+  const cacheable = url.origin === location.origin || url.hostname === "cdn.jsdelivr.net" || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com") || url.hostname === "upload.wikimedia.org";
   if (!cacheable) return;
   // Saved copy first, refreshed in the background.
   e.respondWith(caches.match(req).then(hit => {

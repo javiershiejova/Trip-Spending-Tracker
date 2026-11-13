@@ -285,6 +285,15 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .look-hero{min-height:120px}
 .emoji-own{margin:2px 0 8px}
 .emoji-own .input{padding:10px 12px}
+.hero.has-photo::before{display:none}
+.hero.has-photo{text-shadow:0 1px 10px rgba(0,0,0,.45);min-height:190px;padding-bottom:26px}
+.hero.has-photo .me-chip{background:rgba(0,0,0,.35);text-shadow:none}
+.hero.has-photo .me-chip.on{background:var(--sun)}
+.hero .credit{position:absolute;right:12px;bottom:7px;font-size:10px;color:#fff;opacity:.85;text-decoration:none;max-width:70%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:1}
+.cover-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cover-opt{aspect-ratio:4/3;border-radius:10px;border:3px solid transparent;background-size:cover;background-position:center;background-color:var(--chip);padding:0;cursor:pointer}
+.cover-opt.on{border-color:var(--sun);transform:scale(.96)}
+.pass .stub.photo::after{display:none}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -320,6 +329,33 @@ const AVATARS = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁",
   "💎","🔥","⚡","🎯","🎲","🧩","🍕","🍔","🌮","🍣","🍓","🍑","🥑","🌶️","🧁","🍭","🌸","🌵","🍄","🪐","🌙","⭐","❤️","🧡","💛","💚","💙","💜"];
 const TRIP_COLORS = ["#3F4FF0","#7A45D6","#C93576","#D9483B","#C2620F","#A87A00","#23864A","#0B8577","#1A73C7","#3F4C6B"];
 const tripColor = t => /^#[0-9a-f]{6}$/i.test((t && t.color) || "") ? t.color : "#3F4FF0";
+// Cover photos: only Wikimedia Commons or this app's own photo storage are allowed.
+function safeImg(u){
+  if (typeof u !== "string" || !(/^https:\/\/upload\.wikimedia\.org\//.test(u) || u.startsWith(SUPABASE_URL + "/storage/"))) return "";
+  return u.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\\/g, "%5C").replace(/[\n\r()]/g, m => encodeURIComponent(m));
+}
+function coverOn(t){ return !!(t && t.coverOn && t.cover && safeImg(t.cover.url)); }
+function heroStyle(t, cover, on){
+  const c = tripColor(t), u = on && cover ? safeImg(cover.url) : "";
+  return u ? `background:linear-gradient(180deg,rgba(0,0,0,.10),rgba(0,0,0,.58)),url('${u}') center/cover no-repeat ${c}` : `background:${c}`;
+}
+function heroCredit(cover, on){
+  if (!on || !cover || !cover.credit) return "";
+  const link = /^https:\/\/commons\.wikimedia\.org\//.test(cover.link || "") ? cover.link : "";
+  return link ? `<a class="credit" href="${esc(link)}" target="_blank" rel="noopener">📷 ${esc(cover.credit)}</a>` : `<span class="credit">📷 ${esc(cover.credit)}</span>`;
+}
+async function findPhotos(q){
+  const u = "https://commons.wikimedia.org/w/api.php?" + new URLSearchParams({action:"query", format:"json", origin:"*", generator:"search", gsrnamespace:"6", gsrlimit:"40",
+    gsrsearch:`${q} filetype:bitmap -map -logo -flag -diagram -coat -plan -chart`, prop:"imageinfo", iiprop:"url|size|mime|extmetadata", iiurlwidth:"1280", iiextmetadatafilter:"Artist|LicenseShortName"});
+  const j = await (await fetch(u)).json();
+  return Object.values((j.query && j.query.pages) || {}).sort((a, b) => (a.index || 0) - (b.index || 0)).map(pg => {
+    const ii = pg.imageinfo && pg.imageinfo[0]; if (!ii || !ii.thumburl || !/jpeg|png|webp/.test(ii.mime || "")) return null;
+    if (ii.width < 1000 || ii.width < ii.height * 1.2) return null;   // wide, good-quality photos only
+    const md = ii.extmetadata || {}, artist = String((md.Artist && md.Artist.value) || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 50);
+    const lic = String((md.LicenseShortName && md.LicenseShortName.value) || "").trim().slice(0, 30);
+    return {type:"commons", url:ii.thumburl, thumb:ii.thumburl.replace(/\/\d+px-/, "/400px-"), credit:[artist || "Wikimedia Commons", lic].filter(Boolean).join(" · "), link:ii.descriptionurl || "", q};
+  }).filter(x => x && safeImg(x.url)).slice(0, 12);
+}
 function firstEmoji(str){
   const parts = window.Intl && Intl.Segmenter ? Array.from(new Intl.Segmenter("en", {granularity:"grapheme"}).segment(str || ""), x => x.segment) : Array.from(str || "");
   return parts.find(g => /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u.test(g) && g.length <= 16) || "";
@@ -336,7 +372,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"],["personal","🔒 Me"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.13-a"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.13-b"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -395,7 +431,7 @@ function tripLink(id){ return location.origin + location.pathname + "#t-" + id; 
 (function migrateOldKeys(){ try { const keys = []; for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
   for (const k of keys) if (k && k.startsWith("tk-")){ const nk = "ww-" + k.slice(3); if (localStorage.getItem(nk) == null) localStorage.setItem(nk, localStorage.getItem(k)); localStorage.removeItem(k); } } catch {} })();
 function myTrips(){ try { return JSON.parse(lsGet("ww-trips") || "[]"); } catch { return []; } }
-function rememberTrip(t){ const all = myTrips(), old = all.find(x => x.id === t.id) || {}, list = all.filter(x => x.id !== t.id); list.unshift({id:t.id, name:t.name, emoji:t.emoji, color:t.color, currency:t.currency, people:(t.people||[]).length, seen:Date.now(), archived:!!old.archived}); lsSet("ww-trips", JSON.stringify(list.slice(0, 50))); }
+function rememberTrip(t){ const all = myTrips(), old = all.find(x => x.id === t.id) || {}, list = all.filter(x => x.id !== t.id); list.unshift({id:t.id, name:t.name, emoji:t.emoji, color:t.color, thumb:coverOn(t) ? (t.cover.thumb || t.cover.url) : "", currency:t.currency, people:(t.people||[]).length, seen:Date.now(), archived:!!old.archived}); lsSet("ww-trips", JSON.stringify(list.slice(0, 50))); }
 function isArchived(id){ return !!(myTrips().find(x => x.id === id) || {}).archived; }
 function setArchived(id, flag){ lsSet("ww-trips", JSON.stringify(myTrips().map(x => x.id === id ? {...x, archived:flag} : x))); }
 function forgetTrip(id){ lsSet("ww-trips", JSON.stringify(myTrips().filter(x => x.id !== id))); }
@@ -647,14 +683,14 @@ function homeView(){
   const all = myTrips(), list = all.filter(t => !t.archived), arch = all.filter(t => t.archived);
   const card = t => `
     <button class="pass" data-act="open" data-id="${esc(t.id)}">
-      <span class="stub" style="background:${tripColor(t)}">${esc(t.emoji||"✈️")}</span>
+      <span class="stub ${safeImg(t.thumb) ? "photo" : ""}" style="${safeImg(t.thumb) ? `background:url('${safeImg(t.thumb)}') center/cover ${tripColor(t)}` : `background:${tripColor(t)}`}">${safeImg(t.thumb) ? "" : esc(t.emoji||"✈️")}</span>
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
     </button>`;
   const archived = arch.length ? `<details class="arch"><summary>📦 Archived trips (${arch.length})</summary><div class="stack" style="margin-top:10px">${arch.map(card).join("")}</div></details>` : "";
   const cards = list.length ? list.map(t => `
     <button class="pass" data-act="open" data-id="${esc(t.id)}">
-      <span class="stub" style="background:${tripColor(t)}">${esc(t.emoji||"✈️")}</span>
+      <span class="stub ${safeImg(t.thumb) ? "photo" : ""}" style="${safeImg(t.thumb) ? `background:url('${safeImg(t.thumb)}') center/cover ${tripColor(t)}` : `background:${tripColor(t)}`}">${safeImg(t.thumb) ? "" : esc(t.emoji||"✈️")}</span>
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
     </button>`).join("")
@@ -706,7 +742,7 @@ function tripView(){
     ${S.offline ? `<div class="banner">📴 Offline. Showing what's saved on this phone.${S.pending ? ` ${S.pending} change${S.pending===1?"":"s"} will sync when you're back online.` : " New changes will sync later."}</div>` : S.pending ? `<div class="banner">⏳ Syncing ${S.pending} change${S.pending===1?"":"s"}…</div>` : ""}
     ${isArchived(t.id) ? `<div class="banner row"><span class="grow">📦 Archived on this phone.</span><button class="btn sm" data-act="archive" data-v="0">Unarchive</button></div>` : ""}
     <div class="trip-layout"><aside class="trip-side">
-    <section class="hero" style="background:${tripColor(t)}">
+    <section class="hero ${coverOn(t) ? "has-photo" : ""}" style="${heroStyle(t, t.cover, coverOn(t))}">${heroCredit(t.cover, coverOn(t))}
       <span class="emoji" aria-hidden="true">${esc(t.emoji||"✈️")}</span>
       <div class="sub">Total trip spend</div>
       <div class="total num">${fmt(total, t.currency)}</div>
@@ -909,8 +945,8 @@ function settingsTab(t, exps){
       <p class="muted" style="margin:0 0 8px;font-size:13px">New foreign-currency expenses fill in today's rate automatically (<a href="https://www.exchangerate-api.com" target="_blank" rel="noopener" style="color:inherit">Rates by Exchange Rate API</a>). You can always change it. Saved rates below are used when you're offline.</p>
       ${rates.length ? `<form class="stack" style="gap:8px" data-form="rates">${rates.map(([c, r]) => `<div class="rate-row"><span>1 ${esc(c)} =</span><input class="input num" id="rate-${esc(c)}" data-rate="${esc(c)}" inputmode="decimal" value="${esc(r)}"><span>${esc(t.currency)}</span></div>`).join("")}<button class="btn primary">Save rates</button></form>` : `<p class="muted" style="margin:0;font-size:14px">None yet. Pick a different currency when adding an expense.</p>`}
     </div>
-    <button class="card look-card" data-act="open-look"><span class="look-preview" style="background:${tripColor(t)}">${esc(t.emoji || "✈️")}</span>
-      <span class="grow" style="text-align:left"><b>Trip look</b><span class="note muted" style="display:block">Change the icon and colour</span></span><span aria-hidden="true">▸</span></button>
+    <button class="card look-card" data-act="open-look"><span class="look-preview" style="${coverOn(t) ? `background:url('${safeImg(t.cover.thumb || t.cover.url)}') center/cover ${tripColor(t)}` : `background:${tripColor(t)}`}">${coverOn(t) ? "" : esc(t.emoji || "✈️")}</span>
+      <span class="grow" style="text-align:left"><b>Trip look</b><span class="note muted" style="display:block">Icon, colour or a photo of the place</span></span><span aria-hidden="true">▸</span></button>
     <div class="card"><div class="label" style="margin-bottom:8px">Trip details</div>
       <form class="stack" data-form="trip-details">
         <input class="input" id="trip-name-edit" value="${esc(t.name)}" maxlength="40" aria-label="Trip name">
@@ -978,12 +1014,37 @@ function renderTripSheet(){
       <button type="button" class="btn ghost block" data-act="close">Cancel</button>
     </form>`);
 }
-function lookSheet(){ const t = trip(); draft = {kind:"look", emoji:t.emoji || "✈️", color:tripColor(t)}; renderLookSheet(); }
+function lookSheet(){
+  const t = trip(), places = {}; S.expenses.forEach(e => { if (e.place) places[e.place] = (places[e.place] || 0) + 1; });
+  const topPlace = Object.entries(places).sort((a, b) => b[1] - a[1]).map(x => x[0])[0];
+  draft = {kind:"look", emoji:t.emoji || "✈️", color:tripColor(t), cover:t.cover || null, bg:coverOn(t) ? "photo" : "color",
+    q:(t.cover && t.cover.q) || topPlace || t.name || "", results:[], status:""};
+  renderLookSheet();
+}
+async function searchCovers(){
+  const d = draft; if (!d || d.kind !== "look") return;
+  const q = (d.q || "").trim(); if (!q){ d.status = "Type a place to search."; return renderLookSheet(); }
+  if (navigator.onLine === false){ d.status = "Finding photos needs internet."; return renderLookSheet(); }
+  d.status = "Searching…"; renderLookSheet();
+  try { const r = await findPhotos(q); if (draft !== d) return; d.results = r; d.status = r.length ? "" : `No good photos found for “${q}”. Try a city or landmark name.`; }
+  catch { if (draft !== d) return; d.status = "Couldn't reach the photo library. Try again later."; }
+  renderLookSheet();
+}
 function renderLookSheet(){
   const d = draft, t = trip();
   openSheet(`<div class="xs-head"><h2 class="grow">Trip look 🎨</h2><button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button></div>
-    <div class="hero look-hero" style="background:${d.color}"><span class="emoji" aria-hidden="true">${esc(d.emoji)}</span><div class="sub">Preview</div><div class="total" style="font-size:28px">${esc(t.name)}</div></div>
-    <div class="label" style="margin:14px 0 6px">Colour</div>${colorSwatches(d.color, "look-color")}
+    <div class="hero look-hero ${d.bg === "photo" && d.cover ? "has-photo" : ""}" style="${heroStyle({color:d.color}, d.cover, d.bg === "photo")}">${heroCredit(d.cover, d.bg === "photo")}<span class="emoji" aria-hidden="true">${esc(d.emoji)}</span><div class="sub">Preview</div><div class="total" style="font-size:28px">${esc(t.name)}</div></div>
+    <div class="label" style="margin:14px 0 6px">Main card background</div>
+    <div class="seg"><button type="button" class="${d.bg !== "photo" ? "on" : ""}" data-act="look-bg" data-v="color">🎨 Colour</button><button type="button" class="${d.bg === "photo" ? "on" : ""}" data-act="look-bg" data-v="photo">🏞️ Photo of the place</button></div>
+    ${d.bg === "photo" ? `
+    <div class="stack" style="gap:8px;margin-top:10px">
+      <form class="row" data-form="cover-search"><input class="input grow" id="look-q" placeholder="Place, e.g. Kyoto or Mount Fuji" value="${esc(d.q)}" autocomplete="off"><button class="btn">Find</button></form>
+      ${d.status ? `<p class="note muted" style="margin:0">${esc(d.status)}</p>` : ""}
+      ${d.results.length ? `<div class="cover-grid">${d.results.map((r, i) => `<button type="button" class="cover-opt ${d.cover && d.cover.url === r.url ? "on" : ""}" data-act="look-pick" data-i="${i}" aria-label="Use this photo" style="background-image:url('${safeImg(r.thumb)}')"></button>`).join("")}</div>
+        <p class="note muted" style="margin:0">Free photos from Wikimedia Commons. The photographer is credited on the card.</p>` : ""}
+      <label class="btn ghost block file-btn">📷 Upload my own photo<input type="file" id="cover-file" accept="image/*"></label>
+    </div>` : ""}
+    <div class="label" style="margin:14px 0 6px">Colour${d.bg === "photo" ? " (shown while the photo loads, and on the summary picture)" : ""}</div>${colorSwatches(d.color, "look-color")}
     <div class="label" style="margin:14px 0 6px">Icon</div>
     ${emojiChooser(TRIP_EMOJI, d.emoji, "look-emoji", "trip-pick")}
     <div class="sheet-foot"><button type="button" class="btn primary block" data-act="look-save">Save look</button></div>`);
@@ -1213,6 +1274,18 @@ async function shrink(file){
     return blob || file;
   } catch { return file; }
 }
+async function uploadCover(file){
+  const d = draft; if (!file || !d || d.kind !== "look") return;
+  if (navigator.onLine === false) return toast("Uploading a photo needs internet.");
+  d.uploading = true; d.status = "Uploading your photo…"; renderLookSheet();
+  try {
+    const blob = await shrink(file), path = `${S.tripId}/cover-${newId(12)}.jpg`;
+    check(await sb(S.tripId).storage.from("receipts").upload(path, blob, {contentType:"image/jpeg", upsert:false}));
+    const url = sb(S.tripId).storage.from("receipts").getPublicUrl(path).data.publicUrl;
+    d.cover = {type:"upload", url, thumb:url, credit:"", link:"", q:d.q}; d.status = "";
+  } catch (e){ console.error(e); d.status = "Couldn't upload the photo. Check your connection."; }
+  d.uploading = false; if (draft === d) renderLookSheet();
+}
 async function onReceiptFile(file){
   if (!file || !draft) return;
   if (navigator.onLine === false) return toast("Photos need internet. Save the expense now and add the photo later.");
@@ -1304,8 +1377,14 @@ document.addEventListener("click", async ev => {
   if (act === "trip-color"){ syncTripDraft(); draft.color = el.dataset.c; return renderTripSheet(); }
   if (act === "open-look") return lookSheet();
   if ((act === "look-emoji" || act === "look-color") && draft && draft.kind === "look"){ draft[act === "look-emoji" ? "emoji" : "color"] = act === "look-emoji" ? el.dataset.e : el.dataset.c; return renderLookSheet(); }
-  if (act === "look-save" && draft && draft.kind === "look"){ const d = draft; closeSheet();
-    write([patchTrip({emoji:d.emoji, color:d.color})], "New look saved ✨", [t.id, "trip", `changed the trip look to ${d.emoji}`]); return; }
+  if (act === "look-bg" && draft && draft.kind === "look"){ draft.bg = el.dataset.v; renderLookSheet(); if (draft.bg === "photo" && !draft.results.length && !draft.status) searchCovers(); return; }
+  if (act === "look-pick" && draft && draft.kind === "look"){ const r = draft.results[+el.dataset.i]; if (r){ draft.cover = r; renderLookSheet(); } return; }
+  if (act === "look-save" && draft && draft.kind === "look"){ const d = draft;
+    if (d.uploading) return toast("Hang on, the photo is still uploading.");
+    if (d.bg === "photo" && !d.cover) return toast("Pick a photo first, or switch back to Colour.");
+    closeSheet();
+    write([patchTrip({emoji:d.emoji, color:d.color, cover:d.cover || null, coverOn:d.bg === "photo"})], "New look saved ✨",
+      [t.id, "trip", d.bg === "photo" ? `set a ${d.cover.type === "upload" ? "custom" : ""} photo for the trip card`.replace("a  photo", "a photo") : `changed the trip look to ${d.emoji}`]); return; }
   if (act === "draft-add-person") return addDraftPerson();
   if (act === "draft-avatar"){ syncTripDraft(); draft.pick = draft.pick === +el.dataset.i ? null : +el.dataset.i; return renderTripSheet(); }
   if (act === "av-done"){ syncTripDraft(); draft.pick = null; return renderTripSheet(); }
@@ -1422,6 +1501,7 @@ document.addEventListener("change", ev => {
   if (el.id === "f-cat" || el.id === "f-who" || el.id === "f-method"){
     S[{"f-cat":"fCat","f-who":"fWho","f-method":"fMethod"}[el.id]] = el.value; return render(); }
   if (el.id === "receipt-file"){ onReceiptFile(el.files && el.files[0]); return; }
+  if (el.id === "cover-file"){ uploadCover(el.files && el.files[0]); return; }
   if (el.id === "import-file"){ readImport(el.files && el.files[0]); el.value = ""; return; }
   if (draft && draft.kind === "import"){
     if (el.id === "imp-datefmt"){ draft.dateFmt = el.value; return renderImportSheet(); }
@@ -1448,6 +1528,7 @@ function addDraftPerson(){ syncTripDraft(); const inp = $("#person-name"); const
 document.addEventListener("submit", async ev => {
   ev.preventDefault();
   const form = ev.target.dataset.form, t = trip();
+  if (form === "cover-search"){ if (draft && draft.kind === "look"){ draft.q = $("#look-q").value; searchCovers(); } return; }
   if (form === "join"){
     const v = ($("#join-link").value || "").trim(), m = v.match(/#t-([a-z0-9]{16,})/i) || v.match(/^([a-z0-9]{16,})$/i);
     if (!m){ $("#join-err").textContent = "That doesn't look like a trip link. Open the trip in your browser, tap 🔗 Share, then Copy link."; return; }
