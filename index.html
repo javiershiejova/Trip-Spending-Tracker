@@ -421,7 +421,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"],["personal","🔒 Me"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.13-g"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.13-h"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -719,7 +719,14 @@ function render(){
   const app = $("#app"), ae = document.activeElement;
   const fid = ae && ae.id && app.contains(ae) ? ae.id : null;
   let sel = null; try { if (fid && ae.selectionStart != null) sel = [ae.selectionStart, ae.selectionEnd]; } catch {}
-  app.innerHTML = !CONFIGURED ? setupView() : S.tripId ? tripView() : homeView();
+  const tpl = document.createElement("template");
+  tpl.innerHTML = !CONFIGURED ? setupView() : S.tripId ? tripView() : homeView();
+  // Keep parts that haven't changed (the trip card, its photo, trip cards on Home) so they don't flicker on every redraw.
+  app.querySelectorAll("[data-keep]").forEach(old => {
+    const fresh = tpl.content.querySelector(`[data-keep="${CSS.escape(old.dataset.keep)}"]`);
+    if (fresh && fresh.outerHTML === old.outerHTML) fresh.replaceWith(old);
+  });
+  app.replaceChildren(tpl.content);
   if (fid){ const n = document.getElementById(fid); if (n){ n.focus({preventScroll:true}); if (sel) try { n.setSelectionRange(sel[0], sel[1]); } catch {} } }
 }
 function setupView(){
@@ -731,14 +738,14 @@ function setupView(){
 function homeView(){
   const all = myTrips(), list = all.filter(t => !t.archived), arch = all.filter(t => t.archived);
   const card = t => `
-    <button class="pass ${safeImg(t.thumb) ? "has-photo" : ""}" data-act="open" data-id="${esc(t.id)}" style="${passStyle(t)}">
+    <button data-keep="pass-${esc(t.id)}" class="pass ${safeImg(t.thumb) ? "has-photo" : ""}" data-act="open" data-id="${esc(t.id)}" style="${passStyle(t)}">
       <span class="stub ${safeImg(t.thumb) ? "photo" : ""}" style="${safeImg(t.thumb) ? "background:transparent" : `background:${tripColor(t)}`}">${safeImg(t.thumb) ? `<span class="photo-badge">${esc(t.emoji||"✈️")}</span>` : esc(t.emoji||"✈️")}</span>
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
     </button>`;
   const archived = arch.length ? `<details class="arch"><summary>📦 Archived trips (${arch.length})</summary><div class="stack" style="margin-top:10px">${arch.map(card).join("")}</div></details>` : "";
   const cards = list.length ? list.map(t => `
-    <button class="pass ${safeImg(t.thumb) ? "has-photo" : ""}" data-act="open" data-id="${esc(t.id)}" style="${passStyle(t)}">
+    <button data-keep="pass-${esc(t.id)}" class="pass ${safeImg(t.thumb) ? "has-photo" : ""}" data-act="open" data-id="${esc(t.id)}" style="${passStyle(t)}">
       <span class="stub ${safeImg(t.thumb) ? "photo" : ""}" style="${safeImg(t.thumb) ? "background:transparent" : `background:${tripColor(t)}`}">${safeImg(t.thumb) ? `<span class="photo-badge">${esc(t.emoji||"✈️")}</span>` : esc(t.emoji||"✈️")}</span>
       <span class="body"><h3>${esc(t.name)}</h3>
         <span class="muted" style="font-size:14px">${t.people||0} traveller${t.people===1?"":"s"} · ${esc(t.currency||"")} · opened ${esc(ago(t.seen))}</span></span>
@@ -785,13 +792,13 @@ function tripView(){
   return `
     <div class="topbar">
       <button class="icon-btn" data-act="home" aria-label="All trips">←</button>
-      <h2 class="grow">${esc(t.name)}</h2>
+      <h2 class="grow" data-keep="title-${esc(t.id)}">${esc(t.name)}</h2>
       <button class="btn sun sm" data-act="share">🔗 Share</button>
     </div>
     ${S.offline ? `<div class="banner">📴 Offline. Showing what's saved on this phone.${S.pending ? ` ${S.pending} change${S.pending===1?"":"s"} will sync when you're back online.` : " New changes will sync later."}</div>` : S.pending ? `<div class="banner">⏳ Syncing ${S.pending} change${S.pending===1?"":"s"}…</div>` : ""}
     ${isArchived(t.id) ? `<div class="banner row"><span class="grow">📦 Archived on this phone.</span><button class="btn sm" data-act="archive" data-v="0">Unarchive</button></div>` : ""}
     <div class="trip-layout"><aside class="trip-side">
-    <section class="hero ${coverOn(t) ? "has-photo" : ""}" style="${heroStyle(t, t.cover, coverOn(t))}">${heroCredit(t.cover, coverOn(t))}
+    <section data-keep="hero-${esc(t.id)}" class="hero ${coverOn(t) ? "has-photo" : ""}" style="${heroStyle(t, t.cover, coverOn(t))}">${heroCredit(t.cover, coverOn(t))}
       <span class="emoji" aria-hidden="true">${esc(t.emoji||"✈️")}</span>
       <div class="sub">Total trip spend</div>
       <div class="total num">${fmt(total, t.currency)}</div>
@@ -811,7 +818,7 @@ function tripView(){
 // Desktop only: a compact "who owes what" panel beside the main column.
 function sideBalances(t, net, f){
   const plan = settlePlan(net);
-  return `<div class="card desk-only"><div class="label" style="margin-bottom:6px">Balances</div>
+  return `<div data-keep="side-${esc(t.id)}" class="card desk-only"><div class="label" style="margin-bottom:6px">Balances</div>
     ${(t.people||[]).map(p => { const v = net[p.id]||0; return `<div class="row" style="padding:5px 0">${face(p)}<b class="grow">${esc(p.name)}</b><span class="num ${v>0?"pos":v<0?"neg":"muted"}" style="font-weight:700">${v>0?"+":v<0?"−":""}${v?fmt(Math.abs(v)/f, t.currency):"square"}</span></div>`; }).join("")}
     ${plan.length ? `<div class="note muted" style="margin-top:8px">${plan.map(x => `${esc(person(t, x.from).name)} → ${esc(person(t, x.to).name)} ${fmt(x.v/f, t.currency)}`).join("<br>")}</div>` : ""}
     <button class="btn sm ghost block" style="margin-top:10px" data-act="tab" data-tab="balances">Settle up</button></div>`;
