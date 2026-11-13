@@ -293,6 +293,9 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .cover-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-height:330px;overflow-y:auto;padding:2px}
 .cover-opt{aspect-ratio:4/3;border-radius:10px;border:3px solid transparent;background-size:cover;background-position:center;background-color:var(--chip);padding:0;cursor:pointer}
 .cover-opt.on{border-color:var(--sun);transform:scale(.96)}
+.cover-opt{overflow:hidden;position:relative}
+.cover-opt img{width:100%;height:100%;object-fit:cover;display:block;border-radius:7px}
+.cover-opt.busy::after{content:"⏳";position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.45);font-size:20px}
 .pass .stub.photo::after{display:none}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
@@ -344,13 +347,27 @@ function heroCredit(cover, on){
   const link = /^https:\/\/[^\s"'<>]+$/i.test(cover.link || "") ? cover.link : "";
   return link ? `<a class="credit" href="${esc(link)}" target="_blank" rel="noopener">📷 ${esc(cover.credit)}</a>` : `<span class="credit">📷 ${esc(cover.credit)}</span>`;
 }
+// A small preview straight from the photo's own site (Flickr / Wikimedia sizes), so previews don't depend on Openverse's thumbnail service.
+function smallImg(u){
+  let m;
+  if ((m = u.match(/^(https:\/\/(?:live|farm\d+)\.staticflickr\.com\/\d+\/\d+_[0-9a-f]+)(?:_[a-z0-9]+)?\.(jpg|jpeg|png)$/i))) return `${m[1]}_n.${m[2]}`;
+  if ((m = u.match(/^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/([0-9a-f])\/([0-9a-f]{2})\/([^/?#]+)$/i))) return `https://upload.wikimedia.org/wikipedia/commons/thumb/${m[1]}/${m[2]}/${m[3]}/400px-${m[3]}`;
+  return "";
+}
+window.wwImgFallback = img => {
+  const list = (img.dataset.fb || "").split("|").filter(Boolean);
+  if (list.length){ img.dataset.fb = list.slice(1).join("|"); img.src = list[0]; }
+  else { const b = img.closest(".cover-opt"); if (b) b.hidden = true; }
+};
+function loads(u, ms = 12000){ return new Promise(res => { const im = new Image(); const t = setTimeout(() => res(false), ms); im.onload = () => { clearTimeout(t); res(true); }; im.onerror = () => { clearTimeout(t); res(false); }; im.src = u; }); }
 async function findOpenverse(q){
   const u = "https://api.openverse.org/v1/images/?" + new URLSearchParams({q, page_size:"30", aspect_ratio:"wide", size:"large", category:"photograph", mature:"false"});
   const j = await (await fetch(u)).json();
   const lic = r => { const l = String(r.license || "").toLowerCase(); return l === "pdm" ? "Public domain" : l === "cc0" ? "CC0" : l ? `CC ${l.toUpperCase()} ${r.license_version || ""}`.trim() : ""; };
   return (j.results || []).map(r => {
     const url = String(r.url || "").replace(/^http:\/\//i, "https://"); if (!safeImg(url) || (r.width && r.width < 1000)) return null;
-    return {type:"openverse", url, thumb:safeImg(r.thumbnail) ? r.thumbnail : url,
+    const ovThumb = safeImg(r.thumbnail) ? r.thumbnail : "", small = smallImg(url);
+    return {type:"openverse", url, thumb:small || ovThumb || url, alts:[ovThumb, url].filter(x => x && x !== (small || ovThumb || url)),
       credit:[String(r.creator || "Unknown").replace(/\s+/g, " ").trim().slice(0, 40), lic(r), String(r.source || r.provider || "").replace(/^\w/, c => c.toUpperCase())].filter(Boolean).join(" · "),
       link:String(r.foreign_landing_url || ""), q};
   }).filter(Boolean);
@@ -371,7 +388,7 @@ async function findCommons(q){
     if (ii.width < 1000 || ii.width < ii.height * 1.2) return null;   // wide, good-quality photos only
     const md = ii.extmetadata || {}, artist = String((md.Artist && md.Artist.value) || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 50);
     const lic = String((md.LicenseShortName && md.LicenseShortName.value) || "").trim().slice(0, 30);
-    return {type:"commons", url:ii.thumburl, thumb:ii.thumburl.replace(/\/\d+px-/, "/400px-"), credit:[artist || "Wikimedia Commons", lic].filter(Boolean).join(" · "), link:ii.descriptionurl || "", q};
+    return {type:"commons", url:ii.thumburl, thumb:ii.thumburl.replace(/\/\d+px-/, "/400px-"), alts:[ii.thumburl], credit:[artist || "Wikimedia Commons", lic].filter(Boolean).join(" · "), link:ii.descriptionurl || "", q};
   }).filter(x => x && safeImg(x.url)).slice(0, 12);
 }
 function firstEmoji(str){
@@ -390,7 +407,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"],["personal","🔒 Me"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.13-c"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.13-d"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -1058,7 +1075,7 @@ function renderLookSheet(){
     <div class="stack" style="gap:8px;margin-top:10px">
       <form class="row" data-form="cover-search"><input class="input grow" id="look-q" placeholder="Place, e.g. Kyoto or Mount Fuji" value="${esc(d.q)}" autocomplete="off"><button class="btn">Find</button></form>
       ${d.status ? `<p class="note muted" style="margin:0">${esc(d.status)}</p>` : ""}
-      ${d.results.length ? `<div class="cover-grid">${d.results.map((r, i) => `<button type="button" class="cover-opt ${d.cover && d.cover.url === r.url ? "on" : ""}" data-act="look-pick" data-i="${i}" aria-label="Use this photo" style="background-image:url('${safeImg(r.thumb)}')"></button>`).join("")}</div>
+      ${d.results.length ? `<div class="cover-grid">${d.results.map((r, i) => `<button type="button" class="cover-opt ${d.cover && d.cover.url === r.url ? "on" : ""}" data-act="look-pick" data-i="${i}" aria-label="Use this photo"><img src="${esc(safeImg(r.thumb))}" data-fb="${esc((r.alts || []).map(safeImg).filter(Boolean).join("|"))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="wwImgFallback(this)"></button>`).join("")}</div>
         <p class="note muted" style="margin:0">Free photos from Openverse (Flickr and more) and Wikimedia Commons. The photographer is credited on the card.</p>` : ""}
       <label class="btn ghost block file-btn">📷 Upload my own photo<input type="file" id="cover-file" accept="image/*"></label>
     </div>` : ""}
@@ -1396,7 +1413,11 @@ document.addEventListener("click", async ev => {
   if (act === "open-look") return lookSheet();
   if ((act === "look-emoji" || act === "look-color") && draft && draft.kind === "look"){ draft[act === "look-emoji" ? "emoji" : "color"] = act === "look-emoji" ? el.dataset.e : el.dataset.c; return renderLookSheet(); }
   if (act === "look-bg" && draft && draft.kind === "look"){ draft.bg = el.dataset.v; renderLookSheet(); if (draft.bg === "photo" && !draft.results.length && !draft.status) searchCovers(); return; }
-  if (act === "look-pick" && draft && draft.kind === "look"){ const r = draft.results[+el.dataset.i]; if (r){ draft.cover = r; renderLookSheet(); } return; }
+  if (act === "look-pick" && draft && draft.kind === "look"){
+    const d = draft, r = d.results[+el.dataset.i]; if (!r) return;
+    el.classList.add("busy");
+    if (!(await loads(r.url))){ el.classList.remove("busy"); el.hidden = true; d.results = d.results.filter(x => x !== r); return toast("That photo can't be shown here. Please pick another."); }
+    const {alts, ...cover} = r; if (draft === d){ d.cover = cover; renderLookSheet(); } return; }
   if (act === "look-save" && draft && draft.kind === "look"){ const d = draft;
     if (d.uploading) return toast("Hang on, the photo is still uploading.");
     if (d.bg === "photo" && !d.cover) return toast("Pick a photo first, or switch back to Colour.");
