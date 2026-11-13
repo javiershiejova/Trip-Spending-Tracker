@@ -283,6 +283,8 @@ details.arch summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .look-preview{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:26px;flex:none;box-shadow:var(--shadow)}
 .look-card{display:flex;align-items:center;gap:12px;border:0;width:100%;color:inherit;cursor:pointer;text-align:left}
 .look-hero{min-height:120px}
+.emoji-own{margin:2px 0 8px}
+.emoji-own .input{padding:10px 12px}
 .setup code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 </style>
 </head>
@@ -302,14 +304,31 @@ const CATS = [{k:"food",e:"🍜",l:"Food"},{k:"drinks",e:"🍹",l:"Drinks"},{k:"
 const TRIP_EMOJI = ["🏝️","🏖️","🏔️","⛰️","🗻","🏕️","🌋","🏜️","🌴","🌸","🍁","❄️","☃️","🌅","🌃","🌉",
   "🗼","🗽","🏰","🏯","⛩️","🕌","🛕","🏛️","🎡","🎢","🎪","🎭",
   "✈️","🚗","🚐","🚂","🚢","⛵","🚲","🛵","🧳","🎒","🗺️","🧭",
-  "🍣","🍜","🍕","🥐","🌮","🍷","🍻","☕","🎉","💍","❤️","🎂","🏄","⛷️","🤿","🐘","🦁","🐨","🐼","🐠"];
+  "🍣","🍜","🍕","🥐","🌮","🍷","🍻","☕","🎉","💍","❤️","🎂","🏄","⛷️","🤿","🐘","🦁","🐨","🐼","🐠",
+  "🏞️","🌊","🌄","🏙️","🌆","🗿","🏟️","⛪","🕍","🎠","🎳","🎮","🎨","🎤","🎧","🎬","📷","🛍️","💸","💰","🧧","🎄","🎃","🎆","🎇","🏮","🎏","🪁",
+  "🛶","🚁","🚀","🏍️","🚠","🚤","🛳️","🚌","🚕","🛺","🏁","⛳","🎿","🏂","🏊","🧗","🚴","🥾",
+  "🍔","🍝","🍤","🥟","🍛","🍱","🍰","🍹","🍺","🥂","🍓","🥥","🍦","🧋",
+  "🐪","🐒","🦒","🦓","🐬","🐢","🦜","🦩","🌺","🌼","🌵","🍄","⭐","🌙","☀️","🌈","🌍","🇸🇬","🇲🇾","🇯🇵","🇹🇭","🇰🇷","🇮🇩","🇻🇳","🇬🇧","🇫🇷","🇮🇹","🇺🇸","🇦🇺"];
 const PERSON_EMOJI = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁","🐵","🐰","🐢"];
 const AVATARS = ["🦊","🐼","🐸","🐙","🦄","🐯","🐨","🐧","🦁","🐵","🐰","🐢","🐶","🐱","🐻","🐻‍❄️","🐷","🐮","🐹","🐭","🦝","🦔","🐿️","🦉",
   "🐳","🐬","🦈","🐠","🦩","🦜","🦋","🐝","🐞","🦀","🦖","🐲",
   "😎","🥳","🤠","🤓","🤩","😇","🥸","🤑","😴","👻","👽","🤖",
-  "🧑‍🚀","🏄","🧳","👑","🌟","🌈","🍀","🌻","🍉","🍩","🍦","☕","🎸","⚽","🏀","📸"];
+  "🧑‍🚀","🏄","🧳","👑","🌟","🌈","🍀","🌻","🍉","🍩","🍦","☕","🎸","⚽","🏀","📸",
+  "🐴","🐺","🦒","🦓","🦘","🦥","🦦","🦨","🐊","🐍","🐌","🦕","🐉","🦚","🦢","🕊️","🐓","🐣","🐥","🦆","🐈‍⬛","🐕","🐩","🐑",
+  "😀","😄","😁","😂","🥰","😍","😘","😜","🤪","🤗","🤭","🫡","🤔","😏","😬","😤","🥶","🤯","🥴","🤠","🙃","😋","🥹","😺",
+  "👶","🧒","👦","👧","🧑","👨","👩","🧓","👴","👵","🧑‍🍳","🧑‍🎤","🧑‍🎨","🧑‍💻","🧑‍✈️","🦸","🦹","🧙","🧚","🧛","🧜","🧝","🥷","💃","🕺",
+  "💎","🔥","⚡","🎯","🎲","🧩","🍕","🍔","🌮","🍣","🍓","🍑","🥑","🌶️","🧁","🍭","🌸","🌵","🍄","🪐","🌙","⭐","❤️","🧡","💛","💚","💙","💜"];
 const TRIP_COLORS = ["#3F4FF0","#7A45D6","#C93576","#D9483B","#C2620F","#A87A00","#23864A","#0B8577","#1A73C7","#3F4C6B"];
 const tripColor = t => /^#[0-9a-f]{6}$/i.test((t && t.color) || "") ? t.color : "#3F4FF0";
+function firstEmoji(str){
+  const parts = window.Intl && Intl.Segmenter ? Array.from(new Intl.Segmenter("en", {granularity:"grapheme"}).segment(str || ""), x => x.segment) : Array.from(str || "");
+  return parts.find(g => /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u.test(g) && g.length <= 16) || "";
+}
+function emojiChooser(list, cur, act, cls){
+  const items = !cur || list.includes(cur) ? [...new Set(list)] : [cur, ...new Set(list)];
+  return `<div class="emoji-own"><input class="input" data-own="${act}" placeholder="✍️ Or type any emoji from your keyboard" maxlength="20" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-label="Type your own emoji"></div>
+    <div class="emoji-pick ${cls || ""}">${items.map(e => `<button type="button" class="${cur === e ? "on" : ""}" data-act="${act}" data-e="${esc(e)}" aria-label="${esc(e)}">${esc(e)}</button>`).join("")}</div>`;
+}
 function colorSwatches(current, act){ return `<div class="swatches">${TRIP_COLORS.map(c => `<button type="button" class="sw ${current === c ? "on" : ""}" style="background:${c}" data-act="${act}" data-c="${c}" aria-label="Colour ${c}"></button>`).join("")}</div>`; }
 const COLORS_BASE = ["#FFB4A2","#A8E6CF","#FFD3B6","#B5C7FF","#F8C8F0","#FFE29A","#9FE2F2","#D4C1FF"];
 const COLORS = [...COLORS_BASE, "#C7F0A8","#FFC2D1","#E2E8F0","#FBD38D"];
@@ -317,7 +336,7 @@ const DEFAULT_METHODS = ["💵 Cash","💳 Card","📱 Phone pay","🏦 Transfer
 const CURRENCIES = ["USD","EUR","GBP","JPY","AUD","CAD","SGD","IDR","THB","MYR","KRW","CNY","HKD","INR","CHF","NZD","MXN","VND","PHP","TWD","AED","BRL","ZAR","SEK","NOK","DKK","PLN","CZK","TRY","HUF","ISK","EGP","MAD","ARS","CLP","COP","PEN","SAR","QAR","ILS","LKR","NPR","KHR","LAK"];
 const MODES = [["equal","Equal"],["exact","Exact"],["percent","%"],["shares","Shares"],["items","Items"],["personal","🔒 Me"]];
 const CHEERS = ["Ka-ching! 💸","Logged it! 🎉","Tracked! ✅","Money moves ✨","Noted, big spender 😎","Receipt? Who needs it 🧾"];
-const APP_VERSION = "2026.11.12-e"; // bump on every release: phones compare this with the live copy and update themselves
+const APP_VERSION = "2026.11.13-a"; // bump on every release: phones compare this with the live copy and update themselves
 const CONFIGURED = /^https:\/\//.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30 && !!window.supabase;
 
 const S = { tripId:null, trip:null, expenses:[], activity:[], loaded:false, loadError:"", busy:false,
@@ -944,7 +963,7 @@ function renderTripSheet(){
   openSheet(`<h2>Where are we going? ✈️</h2>
     <form class="stack" data-form="create-trip">
       <div class="field"><label class="label" for="trip-name">Trip name</label><input class="input" id="trip-name" maxlength="40" placeholder="Bali with the besties" value="${esc(d.name)}" required></div>
-      <div class="field"><span class="label">Pick a vibe</span><div class="emoji-pick trip-pick">${TRIP_EMOJI.map(e => `<button type="button" class="${d.emoji===e?"on":""}" data-act="trip-emoji" data-e="${e}">${e}</button>`).join("")}</div></div>
+      <div class="field"><span class="label">Pick a vibe</span>${emojiChooser(TRIP_EMOJI, d.emoji, "trip-emoji", "trip-pick")}</div>
       <div class="field"><span class="label">Colour</span><div class="row"><span class="look-preview" style="background:${tripColor(d)}">${esc(d.emoji)}</span>${colorSwatches(tripColor(d), "trip-color")}</div></div>
       <div class="field"><label class="label" for="trip-cur">Home currency (balances are shown in this)</label><select class="input" id="trip-cur">${curList(d.currency).map(c => `<option ${c===d.currency?"selected":""}>${c}</option>`).join("")}</select></div>
       <div class="field"><span class="label">Dates (optional)</span>
@@ -966,13 +985,13 @@ function renderLookSheet(){
     <div class="hero look-hero" style="background:${d.color}"><span class="emoji" aria-hidden="true">${esc(d.emoji)}</span><div class="sub">Preview</div><div class="total" style="font-size:28px">${esc(t.name)}</div></div>
     <div class="label" style="margin:14px 0 6px">Colour</div>${colorSwatches(d.color, "look-color")}
     <div class="label" style="margin:14px 0 6px">Icon</div>
-    <div class="emoji-pick trip-pick">${TRIP_EMOJI.map(e => `<button type="button" class="${d.emoji === e ? "on" : ""}" data-act="look-emoji" data-e="${e}">${e}</button>`).join("")}</div>
+    ${emojiChooser(TRIP_EMOJI, d.emoji, "look-emoji", "trip-pick")}
     <div class="sheet-foot"><button type="button" class="btn primary block" data-act="look-save">Save look</button></div>`);
 }
 function avatarPicker(p){
   return `<div class="row"><span class="face xl" style="background:${esc(p.color)}" aria-hidden="true">${esc(p.emoji)}</span><b>${esc(p.name)}</b></div>
     <span class="label">Avatar</span>
-    <div class="emoji-pick">${AVATARS.map(e => `<button type="button" class="${p.emoji===e?"on":""}" data-act="av-emoji" data-e="${e}" aria-label="Avatar ${e}">${e}</button>`).join("")}</div>
+    ${emojiChooser(AVATARS, p.emoji, "av-emoji", "trip-pick")}
     <span class="label">Colour</span>
     <div class="swatches">${COLORS.map(c => `<button type="button" class="sw ${p.color===c?"on":""}" style="background:${c}" data-act="av-color" data-c="${c}" aria-label="Colour ${c}"></button>`).join("")}</div>`;
 }
@@ -1383,6 +1402,11 @@ document.addEventListener("keydown", ev => {
 });
 document.addEventListener("input", ev => {
   const el = ev.target;
+  if (el.dataset && el.dataset.own){
+    const e = firstEmoji(el.value); if (!e) return;
+    const btn = document.createElement("button"); btn.dataset.act = el.dataset.own; btn.dataset.e = e; btn.hidden = true;
+    (el.closest(".sheet") || document.body).appendChild(btn); btn.click(); btn.remove(); return;
+  }
   if (el.id === "q"){ S.q = el.value; const box = $("#exp-list"), t = trip(); if (box && t) box.innerHTML = expList(t, S.expenses, me()); return; }
   if (!draft || draft.kind !== "exp") return;
   if (el.id === "exp-rate"){ draft.rateTyped = true; draft.rateSrc = ""; }
